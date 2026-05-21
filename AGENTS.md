@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 8: director/member access, section feeds, and notifications.
+Phase 9: demo data and deployment readiness.
 
 ## Project Standards
 
@@ -55,9 +55,11 @@ Phase 8: director/member access, section feeds, and notifications.
 - Added section and membership management.
 - Added role-aware director/member workspace behavior.
 - Added submission comments and in-app notifications.
+- Added demo content scaffolding for preview mode.
+- Added deployment notes that call out when AWS credentials are needed.
 
 ## What Still Needs To Happen
 
 - Tighten refresh-token and session-expiry handling if needed.
-- Decide whether to seed demo content for portfolio demos.
 - Add richer member lookup or invitation flow if needed.
+- Run the first live Terraform deployment in the AWS account.

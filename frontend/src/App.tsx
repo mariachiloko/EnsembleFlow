@@ -34,6 +34,16 @@ import {
   loadStoredSession,
   type AuthSession,
 } from "./lib/auth";
+import {
+  demoAssignments,
+  demoComments,
+  demoEnsembles,
+  demoMemberships,
+  demoNotifications,
+  demoProfile,
+  demoSections,
+  demoSubmissions,
+} from "./demoData";
 
 const dashboardCards = [
   {
@@ -62,12 +72,7 @@ const rolloutSteps = [
   "Track assignments and submissions",
 ];
 
-const placeholderProfile = {
-  userId: "demo-user",
-  email: "demo@example.com",
-  displayName: "Demo musician",
-  photoKey: "",
-};
+const placeholderProfile = demoProfile;
 
 function App() {
   const [apiState, setApiState] = useState("Checking backend connection...");
@@ -406,39 +411,46 @@ function App() {
 
   const displayedEnsembles = remoteEnsembles.length
     ? remoteEnsembles
-    : [
-        {
-          ensembleId: "ensemble-1",
-          ownerId: profile.userId,
-          name: "Mariachi Los Soles",
-          description: "Director-managed ensemble.",
-          logoKey: "",
-        },
-        {
-          ensembleId: "ensemble-2",
-          ownerId: profile.userId,
-          name: "West Campus Wind Ensemble",
-          description: "Student ensemble with sectional leads.",
-          logoKey: "",
-        },
-      ];
-
-  const activeSections = remoteSections.filter(
+    : demoEnsembles;
+  const visibleSections = remoteSections.length
+    ? remoteSections
+    : demoSections.filter((section) => section.ensembleId === structureEnsembleId || !structureEnsembleId);
+  const visibleMemberships = remoteMemberships.length
+    ? remoteMemberships
+    : demoMemberships.filter(
+        (membership) =>
+          membership.ensembleId === structureEnsembleId || !structureEnsembleId,
+      );
+  const activeSections = visibleSections.filter(
     (section) => section.ensembleId === structureEnsembleId,
   );
-  const activeMemberships = remoteMemberships.filter(
+  const activeMemberships = visibleMemberships.filter(
     (membership) => membership.ensembleId === structureEnsembleId,
   );
+  const visibleAssignments = remoteAssignments.length
+    ? remoteAssignments
+    : demoAssignments.filter(
+        (assignment) =>
+          assignment.ensembleId === structureEnsembleId || !structureEnsembleId,
+      );
+  const visibleSubmissions = remoteSubmissions.length
+    ? remoteSubmissions
+    : demoSubmissions.filter(
+        (submission) =>
+          submission.ensembleId === structureEnsembleId || !structureEnsembleId,
+      );
+  const visibleComments = remoteComments.length ? remoteComments : demoComments;
+  const visibleNotifications = remoteNotifications.length ? remoteNotifications : demoNotifications;
   const currentEnsemble = displayedEnsembles.find(
     (ensemble) => ensemble.ensembleId === structureEnsembleId,
   );
   const selectedSubmission =
-    remoteSubmissions.find((submission) => submission.submissionId === commentSubmissionId) ||
-    remoteSubmissions[0] ||
+    visibleSubmissions.find((submission) => submission.submissionId === commentSubmissionId) ||
+    visibleSubmissions[0] ||
     null;
   const isDirectorMode = Boolean(currentEnsemble && currentEnsemble.ownerId === profile.userId) ||
-    remoteMemberships.some((membership) => membership.role === "director" || membership.role === "leader");
-  const unreadNotificationCount = remoteNotifications.filter((notification) => !notification.isRead).length;
+    visibleMemberships.some((membership) => membership.role === "director" || membership.role === "leader");
+  const unreadNotificationCount = visibleNotifications.filter((notification) => !notification.isRead).length;
 
   async function handleApplyToken(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -633,7 +645,7 @@ function App() {
     setFormMessage("Saving membership...");
 
     try {
-      const section = remoteSections.find((item) => item.sectionId === membershipSectionId);
+      const section = visibleSections.find((item) => item.sectionId === membershipSectionId);
       const result = await createMembership(accessToken, {
         ensembleId: structureEnsembleId,
         userId: membershipUserId,
@@ -1039,8 +1051,8 @@ function App() {
                 <p className="ensemble-status">{ensemble.description || "No description yet."}</p>
                 <p className="ensemble-role">
                   Sections:{" "}
-                  {remoteSections.filter((section) => section.ensembleId === ensemble.ensembleId).length
-                    ? remoteSections
+                  {visibleSections.filter((section) => section.ensembleId === ensemble.ensembleId).length
+                    ? visibleSections
                         .filter((section) => section.ensembleId === ensemble.ensembleId)
                         .map((section) => section.name)
                         .join(", ")
@@ -1255,7 +1267,7 @@ function App() {
         </form>
 
         <div className="ensemble-list">
-          {remoteAssignments.map((assignment) => (
+          {visibleAssignments.map((assignment) => (
             <article className="ensemble-row panel" key={assignment.assignmentId}>
               <div>
                 <p className="ensemble-role">Ensemble ID: {assignment.ensembleId}</p>
@@ -1285,7 +1297,7 @@ function App() {
                 onChange={(event) => setSubmissionAssignmentId(event.target.value)}
               >
                 <option value="">Choose assignment</option>
-                {remoteAssignments.map((assignment) => (
+                {visibleAssignments.map((assignment) => (
                   <option key={assignment.assignmentId} value={assignment.assignmentId}>
                     {assignment.title}
                   </option>
@@ -1318,7 +1330,7 @@ function App() {
         </form>
 
         <div className="ensemble-list">
-          {remoteSubmissions.map((submission) => (
+          {visibleSubmissions.map((submission) => (
             <article className="ensemble-row panel" key={submission.submissionId}>
               <div>
                 <p className="ensemble-role">Assignment: {submission.assignmentId}</p>
@@ -1380,7 +1392,7 @@ function App() {
                 onChange={(event) => setCommentSubmissionId(event.target.value)}
               >
                 <option value="">Choose submission</option>
-                {remoteSubmissions.map((submission) => (
+                {visibleSubmissions.map((submission) => (
                   <option key={submission.submissionId} value={submission.submissionId}>
                     {submission.submissionId}
                   </option>
@@ -1405,8 +1417,8 @@ function App() {
         </div>
 
         <div className="ensemble-list">
-          {remoteComments.length ? (
-            remoteComments.map((comment) => (
+          {visibleComments.length ? (
+            visibleComments.map((comment) => (
               <article className="ensemble-row panel" key={comment.commentId}>
                 <div>
                   <p className="ensemble-role">Author: {comment.authorId}</p>
@@ -1436,8 +1448,8 @@ function App() {
         </div>
 
         <div className="ensemble-list">
-          {remoteNotifications.length ? (
-            remoteNotifications.map((notification) => (
+          {visibleNotifications.length ? (
+            visibleNotifications.map((notification) => (
               <article className="ensemble-row panel" key={notification.notificationId}>
                 <div>
                   <p className="ensemble-role">{notification.type}</p>
@@ -1491,7 +1503,7 @@ function App() {
                 onChange={(event) => setReviewSubmissionId(event.target.value)}
               >
                 <option value="">Choose submission</option>
-                {remoteSubmissions.map((submission) => (
+                {visibleSubmissions.map((submission) => (
                   <option key={submission.submissionId} value={submission.submissionId}>
                     {submission.submissionId}
                   </option>

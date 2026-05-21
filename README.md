@@ -34,3 +34,9 @@ EnsembleFlow is a web app for music ensembles that helps groups stay organized, 
 - `docs/` - architecture notes and implementation reasoning.
 - `notes/` - private local-only scratch notes, ignored by git.
 - `AGENTS.md` - project memory and working rules.
+
+## Deployment Notes
+
+The Terraform stack is ready to be applied to an AWS account, but the live AWS resources have not been created yet.
+
+When you are ready to deploy, Terraform will need AWS credentials from a profile or another configured provider source. The first place that matters is the real `terraform plan` and `terraform apply` step against your account.
