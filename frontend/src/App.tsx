@@ -215,6 +215,7 @@ function App() {
   const [displayName, setDisplayName] = useState(placeholderProfile.displayName);
   const [email, setEmail] = useState(placeholderProfile.email);
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [ensembleName, setEnsembleName] = useState("New ensemble");
   const [ensembleDescription, setEnsembleDescription] = useState("");
   const [ensembleLogoFile, setEnsembleLogoFile] = useState<File | null>(null);
@@ -373,7 +374,7 @@ function App() {
         photoKey: "",
       });
       setDisplayName("");
-      setEmail("");
+      setEmail(sessionClaims.email || "");
 
       try {
         const [profileResponse, ensemblesResponse, notificationsResponse] = await Promise.all([
@@ -634,11 +635,7 @@ function App() {
     );
   const unreadNotificationCount = visibleNotifications.filter((notification) => !notification.isRead).length;
   const showWorkspace = Boolean(accessToken);
-
-  function navigateToSection(id: string) {
-    setActiveSection(id);
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  const workspaceModeLabel = isDirectorMode ? "Management workspace" : "Member workspace";
 
   async function handleApplyToken(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -683,6 +680,7 @@ function App() {
     setMembershipSectionId("");
     setCommentSubmissionId("");
     setCommentBody("");
+    setProfileModalOpen(false);
     setAuthMessage("Signed out.");
     setFormMessage("Signed out.");
 
@@ -1117,7 +1115,7 @@ function App() {
         <div className="sidebar-status">
           <span className="status-chip">{apiState}</span>
           <span className="status-chip status-chip-muted">{authMessage}</span>
-          <span className="status-chip">{isDirectorMode ? "Director" : "Member"}</span>
+          <span className="status-chip">{isDirectorMode ? "Admin" : "Member"}</span>
         </div>
 
         <div className="sidebar-actions">
@@ -1159,7 +1157,7 @@ function App() {
             <div className="topline-statuses">
               <span className="status-chip">{apiState}</span>
               <span className="status-chip status-chip-muted">{authMessage}</span>
-              <span className="status-chip">{isDirectorMode ? "Director mode" : "Member mode"}</span>
+              <span className="status-chip">{workspaceModeLabel}</span>
             </div>
           </div>
           <div className="hero-grid hero-grid-main">
@@ -1189,16 +1187,12 @@ function App() {
                 <p className="eyebrow">Signed in</p>
                 <h2>Hello, {signedInName}</h2>
                 <p className="muted-copy">
-                  {signedInEmail ? signedInEmail : "Add your email and profile photo anytime from your profile."}
+                  {signedInEmail ? signedInEmail : "Your email comes from sign-in."}
                 </p>
-                <p className="muted-copy">Add a profile photo now or later.</p>
               </div>
               <div className="account-actions">
-                <button className="button button-primary" type="button" onClick={() => navigateToSection("profile")}>
-                  Edit profile
-                </button>
-                <button className="button button-secondary" type="button" onClick={() => navigateToSection("profile")}>
-                  Add photo later
+                <button className="button button-primary" type="button" onClick={() => setProfileModalOpen(true)}>
+                  Edit profile photo
                 </button>
                 <button className="button button-secondary" type="button" onClick={handleSignOut}>
                   Sign out
@@ -1231,7 +1225,7 @@ function App() {
         <section className="section" id="overview-details">
           <div className="section-header">
             <div>
-              <h2>{isDirectorMode ? "Director workspace" : "Member workspace"}</h2>
+              <h2>{workspaceModeLabel}</h2>
               <p>
                 {isDirectorMode
                   ? "Manage ensembles, sections, memberships, assignments, and feedback."
@@ -1265,56 +1259,29 @@ function App() {
         <div className="section-header">
           <div>
             <h2>My profile</h2>
-            <p>Create or update your name, email, and photo.</p>
+            <p>Create or update your name and profile photo.</p>
           </div>
           <p className="section-meta">
             Current profile: {profile.displayName || "Not loaded yet"}
           </p>
         </div>
 
-        <form className="panel form-panel" onSubmit={handleProfileSubmit}>
+        <article className="panel">
           <div className="profile-hero">
             <div className="avatar-circle avatar-circle-large" aria-hidden="true">
               {avatarInitials}
             </div>
             <div>
               <h3>{signedInName}</h3>
-              <p className="muted-copy">{signedInEmail || "Photo and email can be added here."}</p>
+              <p className="muted-copy">{signedInEmail || "Your email comes from sign-in."}</p>
             </div>
           </div>
-          <div className="form-grid">
-            <label className="field">
-              <span>Display name</span>
-              <input
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="Musician name"
-              />
-            </label>
-            <label className="field">
-              <span>Email</span>
-              <input
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="name@example.com"
-                type="email"
-              />
-            </label>
-          </div>
-          <label className="field">
-            <span>Profile photo</span>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => setProfilePhotoFile(event.target.files?.[0] ?? null)}
-            />
-          </label>
           <div className="form-actions">
-            <button className="button button-primary" type="submit" disabled={formBusy}>
-              Save profile
+            <button className="button button-primary" type="button" onClick={() => setProfileModalOpen(true)}>
+              Edit profile photo
             </button>
           </div>
-        </form>
+        </article>
       </section>
 
       <section className="section" id="ensembles">
@@ -2003,6 +1970,70 @@ function App() {
           </div>
         </form>
       </section>
+
+      {profileModalOpen ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setProfileModalOpen(false)}
+        >
+          <form
+            className="panel form-panel modal-panel"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={handleProfileSubmit}
+          >
+            <div className="section-header">
+              <div>
+                <h2>Edit profile photo</h2>
+                <p>Update your name and upload a new profile photo.</p>
+              </div>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => setProfileModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="profile-hero">
+              <div className="avatar-circle avatar-circle-large" aria-hidden="true">
+                {avatarInitials}
+              </div>
+              <div>
+                <h3>{signedInName}</h3>
+                <p className="muted-copy">{signedInEmail || "Your email comes from sign-in."}</p>
+              </div>
+            </div>
+
+            <label className="field">
+              <span>Display name</span>
+              <input
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                placeholder="Musician name"
+              />
+            </label>
+
+            <label className="field">
+              <span>Profile photo</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => setProfilePhotoFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
+
+            <p className="muted-copy">Your email stays tied to your sign-in account.</p>
+
+            <div className="form-actions">
+              <button className="button button-primary" type="submit" disabled={formBusy}>
+                Save profile
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
 
       <section className="section">
         <div className="panel panel-accent">

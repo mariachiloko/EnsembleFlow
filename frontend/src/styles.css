@@ -299,6 +299,24 @@ ul {
   border-color: rgba(181, 76, 76, 0.28);
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 14, 13, 0.48);
+  backdrop-filter: blur(8px);
+}
+
+.modal-panel {
+  width: min(100%, 720px);
+  max-height: min(92vh, 920px);
+  overflow: auto;
+  margin: 0;
+}
+
 .section {
   margin-top: 32px;
 }

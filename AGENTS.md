@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 12: email-based Cognito login and recovery.
+Phase 13: member-first workspace refinement and profile modal.
 
 ## Project Standards
 
@@ -65,6 +65,9 @@ Phase 12: email-based Cognito login and recovery.
 - Added ensemble code requests, director approval, co-director access, and member removal flows.
 - Restricted privileged roles so director, co-director, and leader assignments are made only by existing management.
 - Switched Cognito to email-based sign-in and email-based password recovery.
+- Refined the signed-in workspace to lead with a member dashboard, profile summary, and profile-edit modal.
+- Removed the inline profile email editor from the main page.
+- Reworded the workspace so regular users see member-focused labels instead of director wording.
 
 ## What Still Needs To Happen
 
@@ -74,3 +77,4 @@ Phase 12: email-based Cognito login and recovery.
 - Decide whether to add a separate private promotion flow for trusted members who should become directors later.
 - Decide whether to add Google sign-in later as a second identity provider.
 - Verify the first email-based sign-up and password reset flow in the browser after the frontend reloads.
+- Decide whether to add section-specific announcements and section tabs next.
