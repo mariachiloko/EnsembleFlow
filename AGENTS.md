@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 4: auth-ready workflows and deployable handlers.
+Phase 5: hosted authentication and self-hosted deployment wiring.
 
 ## Project Standards
 
@@ -49,11 +49,11 @@ Phase 4: auth-ready workflows and deployable handlers.
 - Added a dashboard-style frontend shell with backend health awareness.
 - Added real profile, ensemble, and upload handler logic.
 - Added form-based frontend workflows that can use a Cognito token.
+- Added Cognito Hosted UI settings and a PKCE sign-in flow.
+- Added auth-aware frontend controls and session persistence.
 
 ## What Still Needs To Happen
 
-- Wire the frontend to Cognito and the real backend routes.
-- Add actual Cognito sign-in UX.
 - Add assignment and submission routes.
+- Build the reviewer/feedback workflow.
 - Add submission review and feedback flow.
-- Document the Lambda folder install step for self-hosted deploys.

@@ -71,6 +71,13 @@ ul {
   margin-bottom: 16px;
 }
 
+.topline-statuses {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .eyebrow {
   display: inline-flex;
   align-items: center;
@@ -180,6 +187,11 @@ ul {
   font-size: 0.9rem;
 }
 
+.status-chip-muted {
+  color: var(--muted);
+  border-color: rgba(31, 42, 40, 0.12);
+}
+
 .ensemble-list {
   display: grid;
   gap: 16px;
@@ -226,6 +238,17 @@ ul {
 .form-panel {
   display: grid;
   gap: 18px;
+}
+
+.auth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.muted-copy {
+  color: var(--muted);
+  margin-bottom: 0;
 }
 
 .form-grid {
@@ -319,6 +342,11 @@ ul {
     align-items: flex-start;
   }
 
+  .topline-statuses,
+  .auth-grid {
+    grid-template-columns: 1fr;
+  }
+
   .hero h1 {
     max-width: 14ch;
   }
@@ -340,5 +368,9 @@ ul {
 
   .ensemble-metrics {
     grid-auto-flow: row;
+  }
+
+  .auth-grid {
+    display: grid;
   }
 }

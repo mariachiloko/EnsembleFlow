@@ -13,3 +13,7 @@ output "user_pool_client_id" {
   description = "Cognito user pool app client ID."
 }
 
+output "hosted_ui_domain" {
+  value       = "https://${aws_cognito_user_pool_domain.this.domain}.auth.${var.aws_region}.amazoncognito.com"
+  description = "Cognito hosted UI base URL."
+}

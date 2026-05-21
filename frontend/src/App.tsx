@@ -8,6 +8,19 @@ import {
   listEnsembles,
   upsertProfile,
 } from "./lib/api";
+import {
+  beginCognitoSignIn,
+  buildCognitoLogoutUrl,
+  clearSession,
+  cognitoClientId,
+  cognitoDomain,
+  cognitoLogoutUri,
+  cognitoRedirectUri,
+  getAuthStatusText,
+  handleCognitoCallback,
+  loadStoredSession,
+  type AuthSession,
+} from "./lib/auth";
 
 const dashboardCards = [
   {
@@ -45,7 +58,8 @@ const placeholderProfile = {
 
 function App() {
   const [apiState, setApiState] = useState("Checking backend connection...");
-  const [sessionToken, setSessionToken] = useState("");
+  const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  const [accessToken, setAccessToken] = useState("");
   const [tokenDraft, setTokenDraft] = useState("");
   const [profile, setProfile] = useState(placeholderProfile);
   const [remoteEnsembles, setRemoteEnsembles] = useState<Array<{
@@ -63,7 +77,8 @@ function App() {
   const [ensembleLogoFile, setEnsembleLogoFile] = useState<File | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadEnsembleId, setUploadEnsembleId] = useState("");
-  const [formMessage, setFormMessage] = useState("Add a session token to try the API forms.");
+  const [formMessage, setFormMessage] = useState("Use Cognito sign-in or paste a token to try the API forms.");
+  const [authMessage, setAuthMessage] = useState("Not signed in.");
   const [formBusy, setFormBusy] = useState(false);
 
   useEffect(() => {
@@ -92,8 +107,42 @@ function App() {
   useEffect(() => {
     let cancelled = false;
 
+    async function initializeAuth() {
+      const stored = loadStoredSession();
+      if (stored) {
+        setAuthSession(stored);
+        setAccessToken(stored.accessToken);
+        setAuthMessage(getAuthStatusText(stored));
+      }
+
+      try {
+        const session = await handleCognitoCallback();
+        if (!cancelled && session) {
+          setAuthSession(session);
+          setAccessToken(session.accessToken);
+          setAuthMessage(getAuthStatusText(session));
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setFormMessage("Signed in with Cognito.");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAuthMessage(error instanceof Error ? error.message : "Auth callback failed.");
+        }
+      }
+    }
+
+    void initializeAuth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
     async function loadWorkspace() {
-      if (!sessionToken) {
+      if (!accessToken) {
         setProfile(placeholderProfile);
         setRemoteEnsembles([]);
         return;
@@ -101,8 +150,8 @@ function App() {
 
       try {
         const [profileResponse, ensemblesResponse] = await Promise.all([
-          getCurrentProfile(sessionToken),
-          listEnsembles(sessionToken),
+          getCurrentProfile(accessToken),
+          listEnsembles(accessToken),
         ]);
 
         if (cancelled) return;
@@ -114,7 +163,6 @@ function App() {
         }
 
         setRemoteEnsembles(ensemblesResponse.ensembles);
-        setFormMessage("Connected to the API with the current session token.");
       } catch (error) {
         if (!cancelled) {
           setFormMessage(error instanceof Error ? error.message : "Could not load workspace data.");
@@ -127,7 +175,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [sessionToken]);
+  }, [accessToken]);
 
   const connectionLabel = useMemo(() => {
     if (!apiUrl) {
@@ -158,12 +206,39 @@ function App() {
 
   async function handleApplyToken(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSessionToken(tokenDraft.trim());
+    setAuthSession(null);
+    setAccessToken(tokenDraft.trim());
+    setAuthMessage(tokenDraft.trim() ? "Manual access token loaded." : "Manual token cleared.");
     setFormMessage(
       tokenDraft.trim()
-        ? "Session token set. The workspace will load your profile and ensembles."
+        ? "Access token set. The workspace will load your profile and ensembles."
         : "Token cleared. The forms will stay in preview mode.",
     );
+  }
+
+  async function handleSignIn() {
+    try {
+      await beginCognitoSignIn();
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Could not start sign-in.");
+    }
+  }
+
+  async function handleSignOut() {
+    clearSession();
+    setAuthSession(null);
+    setAccessToken("");
+    setTokenDraft("");
+    setRemoteEnsembles([]);
+    setProfile(placeholderProfile);
+    setDisplayName(placeholderProfile.displayName);
+    setEmail(placeholderProfile.email);
+    setAuthMessage("Signed out.");
+
+    const logoutUrl = buildCognitoLogoutUrl();
+    if (logoutUrl) {
+      window.location.assign(logoutUrl);
+    }
   }
 
   async function uploadFileToS3(
@@ -171,11 +246,11 @@ function App() {
     fileType: string,
     ensembleId?: string,
   ) {
-    if (!sessionToken) {
-      throw new Error("Add a session token first.");
+    if (!accessToken) {
+      throw new Error("Sign in with Cognito or paste an access token first.");
     }
 
-    const presign = await createUploadPresign(sessionToken, {
+    const presign = await createUploadPresign(accessToken, {
       fileName: file.name,
       contentType: file.type || "application/octet-stream",
       fileType,
@@ -209,7 +284,7 @@ function App() {
         photoKey = await uploadFileToS3(profilePhotoFile, "profile-photo");
       }
 
-      const result = await upsertProfile(sessionToken, {
+      const result = await upsertProfile(accessToken, {
         email,
         displayName,
         photoKey,
@@ -237,7 +312,7 @@ function App() {
         logoKey = await uploadFileToS3(ensembleLogoFile, "ensemble-logo");
       }
 
-      const result = await createEnsemble(sessionToken, {
+      const result = await createEnsemble(accessToken, {
         name: ensembleName,
         description: ensembleDescription,
         logoKey,
@@ -281,7 +356,10 @@ function App() {
       <section className="hero">
         <div className="hero-topline">
           <p className="eyebrow">EnsembleFlow</p>
-          <span className="status-chip">{apiState}</span>
+          <div className="topline-statuses">
+            <span className="status-chip">{apiState}</span>
+            <span className="status-chip status-chip-muted">{authMessage}</span>
+          </div>
         </div>
         <div className="hero-grid hero-grid-main">
           <div>
@@ -325,17 +403,48 @@ function App() {
       <section className="section">
         <div className="section-header">
           <div>
-            <h2>Session token</h2>
+            <h2>Authentication</h2>
             <p>
-              Paste a Cognito access token here when the auth flow is available.
-              Until then, the rest of the UI stays in preview mode.
+              Use Cognito sign-in for the normal path. The access token input
+              stays available as a fallback for local testing.
             </p>
           </div>
         </div>
 
-        <form className="panel form-panel" onSubmit={handleApplyToken}>
+        <div className="auth-grid">
+          <div className="panel form-panel">
+            <h3>Cognito sign-in</h3>
+            <p className="muted-copy">
+              {cognitoDomain && cognitoClientId && cognitoRedirectUri
+                ? "The hosted UI is configured for this environment."
+                : "Set the Cognito environment variables to enable hosted login."}
+            </p>
+            <div className="form-actions">
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={handleSignIn}
+                disabled={!cognitoDomain || !cognitoClientId || !cognitoRedirectUri}
+              >
+                Sign in with Cognito
+              </button>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={handleSignOut}
+                disabled={!authSession && !accessToken}
+              >
+                Sign out
+              </button>
+            </div>
+            <p className="muted-copy">
+              Logout URL configured: {cognitoLogoutUri ? "yes" : "no"}
+            </p>
+          </div>
+
+          <form className="panel form-panel" onSubmit={handleApplyToken}>
           <label className="field">
-            <span>Access token</span>
+            <span>Manual access token</span>
             <textarea
               value={tokenDraft}
               onChange={(event) => setTokenDraft(event.target.value)}
@@ -352,14 +461,17 @@ function App() {
               type="button"
               onClick={() => {
                 setTokenDraft("");
-                setSessionToken("");
+                setAccessToken("");
+                setAuthSession(null);
+                setAuthMessage("Manual token cleared.");
                 setFormMessage("Token cleared. Preview mode restored.");
               }}
             >
               Clear
             </button>
           </div>
-        </form>
+          </form>
+        </div>
       </section>
 
       <section className="section">

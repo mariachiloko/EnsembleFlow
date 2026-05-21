@@ -13,8 +13,12 @@ output "user_pool_client_id" {
   value       = module.auth.user_pool_client_id
 }
 
+output "hosted_ui_domain" {
+  description = "Cognito hosted UI base URL."
+  value       = module.auth.hosted_ui_domain
+}
+
 output "uploads_bucket_name" {
   description = "S3 bucket used for uploads."
   value       = module.storage.bucket_name
 }
-

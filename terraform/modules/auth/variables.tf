@@ -8,3 +8,22 @@ variable "environment" {
   description = "Deployment environment."
 }
 
+variable "aws_region" {
+  type        = string
+  description = "AWS region for Cognito hosted UI URLs."
+}
+
+variable "domain_prefix" {
+  type        = string
+  description = "Hosted UI domain prefix."
+}
+
+variable "callback_urls" {
+  type        = list(string)
+  description = "Allowed OAuth callback URLs."
+}
+
+variable "logout_urls" {
+  type        = list(string)
+  description = "Allowed OAuth logout URLs."
+}

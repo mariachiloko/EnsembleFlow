@@ -1,8 +1,12 @@
 module "auth" {
   source = "./modules/auth"
 
-  project_name = var.project_name
-  environment  = var.environment
+  project_name  = var.project_name
+  environment   = var.environment
+  aws_region    = var.aws_region
+  domain_prefix = var.cognito_domain_prefix
+  callback_urls = var.oauth_callback_urls
+  logout_urls   = var.oauth_logout_urls
 }
 
 module "database" {
@@ -37,4 +41,3 @@ module "api" {
   uploads_table_name     = module.database.uploads_table_name
   uploads_bucket_name    = module.storage.bucket_name
 }
-
