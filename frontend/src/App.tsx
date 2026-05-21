@@ -51,20 +51,20 @@ import {
 
 const dashboardCards = [
   {
-    title: "Profile",
-    body: "Store display name, photo, and role information for each account.",
+    title: "My profile",
+    body: "Store display name, photo, and email for each account.",
   },
   {
-    title: "Ensembles",
-    body: "Manage one or more groups, each with its own sections and members.",
+    title: "My ensembles",
+    body: "See the groups you belong to and open the one you need.",
   },
   {
-    title: "Media",
-    body: "Send profile photos, ensemble logos, and practice clips through the app.",
+    title: "My assignments",
+    body: "Track due dates and see what is expected next.",
   },
   {
-    title: "Assignments",
-    body: "Track due dates, completion, and feedback for practice work.",
+    title: "My submissions",
+    body: "Upload practice videos and follow the feedback thread.",
   },
 ];
 
@@ -78,7 +78,6 @@ const rolloutSteps = [
 
 const navigationSections = [
   { id: "overview", label: "Overview" },
-  { id: "auth", label: "Access" },
   { id: "profile", label: "Profile" },
   { id: "ensembles", label: "Ensembles" },
   { id: "structure", label: "Sections" },
@@ -90,6 +89,42 @@ const navigationSections = [
 ];
 
 const placeholderProfile = demoProfile;
+
+function decodeJwtPayload(token?: string) {
+  if (!token) {
+    return {};
+  }
+
+  const parts = token.split(".");
+  if (parts.length < 2) {
+    return {};
+  }
+
+  try {
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    return JSON.parse(window.atob(padded)) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function getInitials(value: string) {
+  const words = value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (!words.length) {
+    return "M";
+  }
+
+  return words
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("")
+    .slice(0, 2);
+}
 
 function App() {
   const [apiState, setApiState] = useState("Checking backend connection...");
@@ -220,14 +255,39 @@ function App() {
   const [reviewSubmissionId, setReviewSubmissionId] = useState("");
   const [reviewStatus, setReviewStatus] = useState("approved");
   const [reviewFeedback, setReviewFeedback] = useState("");
-  const [formMessage, setFormMessage] = useState("Use hosted sign-in or paste a token to try the forms.");
+  const [formMessage, setFormMessage] = useState("");
   const [authMessage, setAuthMessage] = useState("Not signed in.");
   const [formBusy, setFormBusy] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastKind, setToastKind] = useState<"success" | "error" | "info">("success");
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("ensembleflow-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!formMessage) {
+      return;
+    }
+
+    const isToastable = !/^(Saving|Preparing|Loading|Sending|Approving|Removing|Checking)/i.test(formMessage) &&
+      !formMessage.endsWith("...");
+
+    if (!isToastable) {
+      return;
+    }
+
+    const kind = /failed|error|missing|invalid|unavailable|denied/i.test(formMessage)
+      ? "error"
+      : "success";
+
+    setToastKind(kind);
+    setToastMessage(formMessage);
+
+    const timeout = window.setTimeout(() => setToastMessage(""), 2800);
+    return () => window.clearTimeout(timeout);
+  }, [formMessage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -305,6 +365,15 @@ function App() {
         setCommentSubmissionId("");
         return;
       }
+
+      setProfile({
+        userId: "",
+        email: "",
+        displayName: "",
+        photoKey: "",
+      });
+      setDisplayName("");
+      setEmail("");
 
       try {
         const [profileResponse, ensemblesResponse, notificationsResponse] = await Promise.all([
@@ -541,6 +610,19 @@ function App() {
   const currentEnsemble = displayedEnsembles.find(
     (ensemble) => ensemble.ensembleId === structureEnsembleId,
   );
+  const sessionClaims = useMemo(() => decodeJwtPayload(authSession?.idToken), [authSession?.idToken]);
+  const signedInName = accessToken
+    ? (profile.displayName.trim() &&
+        profile.displayName !== placeholderProfile.displayName
+          ? profile.displayName.trim()
+          : sessionClaims.name || sessionClaims.email || "Musician")
+    : placeholderProfile.displayName;
+  const signedInEmail = accessToken
+    ? (profile.email.trim() && profile.email !== placeholderProfile.email
+        ? profile.email.trim()
+        : sessionClaims.email || "")
+    : placeholderProfile.email;
+  const avatarInitials = getInitials(signedInName);
   const selectedSubmission =
     visibleSubmissions.find((submission) => submission.submissionId === commentSubmissionId) ||
     visibleSubmissions[0] ||
@@ -552,6 +634,11 @@ function App() {
     );
   const unreadNotificationCount = visibleNotifications.filter((notification) => !notification.isRead).length;
   const showWorkspace = Boolean(accessToken);
+
+  function navigateToSection(id: string) {
+    setActiveSection(id);
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   async function handleApplyToken(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -597,6 +684,7 @@ function App() {
     setCommentSubmissionId("");
     setCommentBody("");
     setAuthMessage("Signed out.");
+    setFormMessage("Signed out.");
 
     const logoutUrl = buildCognitoLogoutUrl();
     if (logoutUrl) {
@@ -978,6 +1066,7 @@ function App() {
           </p>
           <p className="muted-copy">
             Sign in with email and password. Use the forgot-password link if you need a reset.
+            Google sign-in is not connected yet.
           </p>
         </section>
 
@@ -1001,6 +1090,7 @@ function App() {
             </div>
             <p className="muted-copy">The hosted sign-in page supports email sign-up.</p>
             <p className="muted-copy">Password resets go through Cognito email recovery.</p>
+            <p className="muted-copy">Google sign-in is not wired up in this environment.</p>
           </div>
 
           <div className="panel form-panel">
@@ -1020,7 +1110,7 @@ function App() {
           <p className="eyebrow">EnsembleFlow</p>
           <h2>Workspace</h2>
           <p className="muted-copy">
-            Manage profiles, ensembles, sections, assignments, and feedback in one place.
+            Manage your profile, ensembles, assignments, submissions, and updates in one place.
           </p>
         </div>
 
@@ -1063,164 +1153,119 @@ function App() {
       </aside>
 
       <div className="workspace">
-      <section className="hero" id="overview">
-        <div className="hero-topline">
-          <p className="eyebrow">EnsembleFlow</p>
-          <div className="topline-statuses">
-            <span className="status-chip">{apiState}</span>
-            <span className="status-chip status-chip-muted">{authMessage}</span>
-            <span className="status-chip">{isDirectorMode ? "Director mode" : "Member mode"}</span>
+        <section className="hero" id="overview">
+          <div className="hero-topline">
+            <p className="eyebrow">EnsembleFlow</p>
+            <div className="topline-statuses">
+              <span className="status-chip">{apiState}</span>
+              <span className="status-chip status-chip-muted">{authMessage}</span>
+              <span className="status-chip">{isDirectorMode ? "Director mode" : "Member mode"}</span>
+            </div>
           </div>
-        </div>
-        <div className="hero-grid hero-grid-main">
-          <div>
-            <h1>Keep ensembles organized and accountable.</h1>
-            <p className="lede">
-              EnsembleFlow brings profiles, groups, sections, media, and
-              practice tracking into one workspace for music teams.
-            </p>
+          <div className="hero-grid hero-grid-main">
+            <div>
+              <h1>Keep ensembles organized and accountable.</h1>
+              <p className="lede">
+                EnsembleFlow brings profiles, groups, sections, media, and practice tracking into one workspace for music teams.
+              </p>
+            </div>
+
+            <article className="panel panel-accent">
+              <h2>How it works</h2>
+              <ol className="phase-list">
+                {rolloutSteps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            </article>
+          </div>
+
+          <div className="card-grid dashboard-grid">
+            <article className="panel account-card">
+              <div className="avatar-circle" aria-hidden="true">
+                {avatarInitials}
+              </div>
+              <div className="account-copy">
+                <p className="eyebrow">Signed in</p>
+                <h2>Hello, {signedInName}</h2>
+                <p className="muted-copy">
+                  {signedInEmail ? signedInEmail : "Add your email and profile photo anytime from your profile."}
+                </p>
+                <p className="muted-copy">Add a profile photo now or later.</p>
+              </div>
+              <div className="account-actions">
+                <button className="button button-primary" type="button" onClick={() => navigateToSection("profile")}>
+                  Edit profile
+                </button>
+                <button className="button button-secondary" type="button" onClick={() => navigateToSection("profile")}>
+                  Add photo later
+                </button>
+                <button className="button button-secondary" type="button" onClick={handleSignOut}>
+                  Sign out
+                </button>
+              </div>
+            </article>
+
+            <article className="panel">
+              <h3>Join an ensemble</h3>
+              <p className="muted-copy">Enter a code from a director to request access.</p>
+              <form className="mini-form" onSubmit={handleJoinRequestSubmit}>
+                <label className="field">
+                  <span>Ensemble code</span>
+                  <input
+                    value={joinCodeDraft}
+                    onChange={(event) => setJoinCodeDraft(event.target.value.toUpperCase())}
+                    placeholder="ENTER CODE"
+                  />
+                </label>
+                <div className="form-actions">
+                  <button className="button button-primary" type="submit" disabled={formBusy}>
+                    Request access
+                  </button>
+                </div>
+              </form>
+            </article>
+          </div>
+        </section>
+
+        <section className="section" id="overview-details">
+          <div className="section-header">
+            <div>
+              <h2>{isDirectorMode ? "Director workspace" : "Member workspace"}</h2>
+              <p>
+                {isDirectorMode
+                  ? "Manage ensembles, sections, memberships, assignments, and feedback."
+                  : "Focus on your ensembles, your assignments, your submissions, and your section feed."}
+              </p>
+            </div>
+            <p className="section-meta">{connectionLabel}</p>
+          </div>
+
+          <div className="card-grid dashboard-grid">
+            {dashboardCards.map((item) => (
+              <article className="panel" key={item.title}>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </article>
+            ))}
           </div>
 
           <article className="panel panel-accent">
-            <h2>How it works</h2>
-            <ol className="phase-list">
-              {rolloutSteps.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
-          </article>
-        </div>
-      </section>
-
-      <section className="section" id="overview-details">
-        <div className="section-header">
-          <div>
-            <h2>Workspace overview</h2>
-            <p>Simple dashboard areas for the first version of the app.</p>
-          </div>
-          <p className="section-meta">{connectionLabel}</p>
-        </div>
-
-        <div className="card-grid dashboard-grid">
-          {dashboardCards.map((item) => (
-            <article className="panel" key={item.title}>
-              <h3>{item.title}</h3>
-              <p>{item.body}</p>
-            </article>
-          ))}
-        </div>
-
-        <article className="panel panel-accent">
-          <h3>{isDirectorMode ? "Director workspace" : "Member workspace"}</h3>
-          <p>
-            {isDirectorMode
-              ? "This view can manage ensembles, sections, memberships, assignments, and feedback."
-              : "This view focuses on the current section feed, submission comments, and notifications."}
-          </p>
-          <p className="muted-copy">
-            Notifications waiting: {unreadNotificationCount}
-          </p>
-        </article>
-      </section>
-
-      <section className="section" id="auth">
-        <div className="section-header">
-          <div>
-            <h2>Access</h2>
+            <h3>What you can do here</h3>
             <p>
-              Sign in, request access with an ensemble code, and keep the token field only as a fallback.
+              {isDirectorMode
+                ? "Create assignments, approve join requests, place people in sections, and leave feedback."
+                : "Open your ensembles, submit practice videos, and reply to feedback inside your section."}
             </p>
-          </div>
-        </div>
-
-        <div className="auth-grid">
-          <div className="panel form-panel">
-            <h3>Hosted sign-in</h3>
-            <p className="muted-copy">
-              {cognitoDomain && cognitoClientId && cognitoRedirectUri
-                ? "The hosted sign-in is configured for this environment."
-                : "Set the sign-in environment variables to enable hosted login."}
-            </p>
-            <div className="form-actions">
-              <button
-                className="button button-primary"
-                type="button"
-                onClick={handleSignIn}
-                disabled={!cognitoDomain || !cognitoClientId || !cognitoRedirectUri}
-              >
-                Sign in
-              </button>
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={handleSignOut}
-                disabled={!authSession && !accessToken}
-              >
-                Sign out
-              </button>
-            </div>
-            <p className="muted-copy">
-              Logout URL configured: {cognitoLogoutUri ? "yes" : "no"}
-            </p>
-          </div>
-
-          <form className="panel form-panel" onSubmit={handleJoinRequestSubmit}>
-            <h3>Request access</h3>
-            <label className="field">
-              <span>Ensemble code</span>
-              <input
-                value={joinCodeDraft}
-                onChange={(event) => setJoinCodeDraft(event.target.value.toUpperCase())}
-                placeholder="ENTER CODE"
-              />
-            </label>
-            <div className="form-actions">
-              <button className="button button-primary" type="submit" disabled={formBusy}>
-                Send request
-              </button>
-            </div>
-            <p className="muted-copy">
-              A director or co-director approves the request before you are added.
-            </p>
-          </form>
-
-          <form className="panel form-panel" onSubmit={handleApplyToken}>
-            <label className="field">
-              <span>Manual access token</span>
-              <textarea
-                value={tokenDraft}
-                onChange={(event) => setTokenDraft(event.target.value)}
-                placeholder="Paste access token here"
-                rows={4}
-              />
-            </label>
-            <div className="form-actions">
-              <button className="button button-primary" type="submit">
-                Use token
-              </button>
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => {
-                  setTokenDraft("");
-                  setAccessToken("");
-                  setAuthSession(null);
-                  setAuthMessage("Manual token cleared.");
-                  setFormMessage("Token cleared. Preview mode restored.");
-                }}
-              >
-                Clear
-              </button>
-            </div>
-          </form>
-        </div>
-      </section>
+            <p className="muted-copy">Notifications waiting: {unreadNotificationCount}</p>
+          </article>
+        </section>
 
       <section className="section" id="profile">
         <div className="section-header">
           <div>
-            <h2>Profile</h2>
-            <p>Create or update the signed-in user profile.</p>
+            <h2>My profile</h2>
+            <p>Create or update your name, email, and photo.</p>
           </div>
           <p className="section-meta">
             Current profile: {profile.displayName || "Not loaded yet"}
@@ -1228,6 +1273,15 @@ function App() {
         </div>
 
         <form className="panel form-panel" onSubmit={handleProfileSubmit}>
+          <div className="profile-hero">
+            <div className="avatar-circle avatar-circle-large" aria-hidden="true">
+              {avatarInitials}
+            </div>
+            <div>
+              <h3>{signedInName}</h3>
+              <p className="muted-copy">{signedInEmail || "Photo and email can be added here."}</p>
+            </div>
+          </div>
           <div className="form-grid">
             <label className="field">
               <span>Display name</span>
@@ -1266,8 +1320,12 @@ function App() {
       <section className="section" id="ensembles">
         <div className="section-header">
           <div>
-            <h2>Ensembles</h2>
-            <p>Add new groups and keep their logos and descriptions organized.</p>
+            <h2>{isDirectorMode ? "Ensembles" : "My ensembles"}</h2>
+            <p>
+              {isDirectorMode
+                ? "Add new groups and keep their logos and descriptions organized."
+                : "See the ensembles you belong to and open the one you want to work in."}
+            </p>
           </div>
         </div>
 
@@ -1341,7 +1399,11 @@ function App() {
         <div className="section-header">
           <div>
             <h2>Sections and members</h2>
-            <p>Group the ensemble by section and assign people to each group.</p>
+            <p>
+              {isDirectorMode
+                ? "Group the ensemble by section and assign people to each group."
+                : "See the section you belong to and the other members in that section."}
+            </p>
           </div>
           <p className="section-meta">
             Ensemble in focus:{" "}
@@ -1350,66 +1412,66 @@ function App() {
           </p>
         </div>
 
-        <div className="auth-grid">
-          <form className="panel form-panel" onSubmit={handleSectionSubmit}>
-            <h3>Create section</h3>
-            <div className="form-grid">
+        {isDirectorMode ? (
+          <div className="auth-grid">
+            <form className="panel form-panel" onSubmit={handleSectionSubmit}>
+              <h3>Create section</h3>
+              <div className="form-grid">
+                <label className="field">
+                  <span>Ensemble</span>
+                  <select
+                    value={structureEnsembleId}
+                    onChange={(event) => {
+                      setStructureEnsembleId(event.target.value);
+                      setMembershipSectionId("");
+                    }}
+                  >
+                    <option value="">Choose ensemble</option>
+                    {displayedEnsembles.map((ensemble) => (
+                      <option key={ensemble.ensembleId} value={ensemble.ensembleId}>
+                        {ensemble.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Section name</span>
+                  <input
+                    value={sectionName}
+                    onChange={(event) => setSectionName(event.target.value)}
+                    placeholder="Brass"
+                  />
+                </label>
+              </div>
               <label className="field">
-                <span>Ensemble</span>
-                <select
-                  value={structureEnsembleId}
-                  onChange={(event) => {
-                    setStructureEnsembleId(event.target.value);
-                    setMembershipSectionId("");
-                  }}
-                >
-                  <option value="">Choose ensemble</option>
-                  {displayedEnsembles.map((ensemble) => (
-                    <option key={ensemble.ensembleId} value={ensemble.ensembleId}>
-                      {ensemble.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Section name</span>
-                <input
-                  value={sectionName}
-                  onChange={(event) => setSectionName(event.target.value)}
-                  placeholder="Brass"
+                <span>Description</span>
+                <textarea
+                  value={sectionDescription}
+                  onChange={(event) => setSectionDescription(event.target.value)}
+                  placeholder="Short section description"
+                  rows={3}
                 />
               </label>
-            </div>
-            <label className="field">
-              <span>Description</span>
-              <textarea
-                value={sectionDescription}
-                onChange={(event) => setSectionDescription(event.target.value)}
-                placeholder="Short section description"
-                rows={3}
-              />
-            </label>
-            <div className="form-actions">
-              <button className="button button-primary" type="submit" disabled={formBusy}>
-                Save section
-              </button>
-            </div>
-          </form>
+              <div className="form-actions">
+                <button className="button button-primary" type="submit" disabled={formBusy}>
+                  Save section
+                </button>
+              </div>
+            </form>
 
-          <form className="panel form-panel" onSubmit={handleMembershipSubmit}>
-            <h3>Assign member</h3>
-            <div className="form-grid">
-              <label className="field">
-                <span>Member user ID</span>
-                <input
-                  value={membershipUserId}
-                  onChange={(event) => setMembershipUserId(event.target.value)}
-                  placeholder="member-user-id"
-                />
-              </label>
-              <label className="field">
-                <span>Role</span>
-                {isDirectorMode ? (
+            <form className="panel form-panel" onSubmit={handleMembershipSubmit}>
+              <h3>Assign member</h3>
+              <div className="form-grid">
+                <label className="field">
+                  <span>Member user ID</span>
+                  <input
+                    value={membershipUserId}
+                    onChange={(event) => setMembershipUserId(event.target.value)}
+                    placeholder="member-user-id"
+                  />
+                </label>
+                <label className="field">
+                  <span>Role</span>
                   <select
                     value={membershipRole}
                     onChange={(event) => setMembershipRole(event.target.value)}
@@ -1419,32 +1481,35 @@ function App() {
                     <option value="co_director">Co-director</option>
                     <option value="director">Director</option>
                   </select>
-                ) : (
-                  <input value="Member" readOnly />
-                )}
+                </label>
+              </div>
+              <label className="field">
+                <span>Section</span>
+                <select
+                  value={membershipSectionId}
+                  onChange={(event) => setMembershipSectionId(event.target.value)}
+                >
+                  <option value="">No section</option>
+                  {activeSections.map((section) => (
+                    <option key={section.sectionId} value={section.sectionId}>
+                      {section.name}
+                    </option>
+                  ))}
+                </select>
               </label>
-            </div>
-            <label className="field">
-              <span>Section</span>
-              <select
-                value={membershipSectionId}
-                onChange={(event) => setMembershipSectionId(event.target.value)}
-              >
-                <option value="">No section</option>
-                {activeSections.map((section) => (
-                  <option key={section.sectionId} value={section.sectionId}>
-                    {section.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="form-actions">
-              <button className="button button-primary" type="submit" disabled={formBusy}>
-                Save membership
-              </button>
-            </div>
-          </form>
-        </div>
+              <div className="form-actions">
+                <button className="button button-primary" type="submit" disabled={formBusy}>
+                  Save membership
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <article className="panel">
+            <h3>Your section</h3>
+            <p className="muted-copy">Your director places you in a section after approval.</p>
+          </article>
+        )}
 
         <div className="card-grid dashboard-grid">
           {activeSections.length ? (
@@ -1543,59 +1608,70 @@ function App() {
       <section className="section" id="assignments">
         <div className="section-header">
           <div>
-            <h2>Assignments</h2>
-            <p>Create practice tasks for a specific ensemble and due date.</p>
+            <h2>{isDirectorMode ? "Assignments" : "My assignments"}</h2>
+            <p>
+              {isDirectorMode
+                ? "Create practice tasks for a specific ensemble and due date."
+                : "See the practice tasks assigned to your ensembles."}
+            </p>
           </div>
         </div>
 
-        <form className="panel form-panel" onSubmit={handleAssignmentSubmit}>
-          <div className="form-grid">
+        {isDirectorMode ? (
+          <form className="panel form-panel" onSubmit={handleAssignmentSubmit}>
+            <div className="form-grid">
+              <label className="field">
+                <span>Ensemble</span>
+                <select
+                  value={assignmentEnsembleId}
+                  onChange={(event) => setAssignmentEnsembleId(event.target.value)}
+                >
+                  <option value="">Choose ensemble</option>
+                  {displayedEnsembles.map((ensemble) => (
+                    <option key={ensemble.ensembleId} value={ensemble.ensembleId}>
+                      {ensemble.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Due date</span>
+                <input
+                  type="date"
+                  value={assignmentDueDate}
+                  onChange={(event) => setAssignmentDueDate(event.target.value)}
+                />
+              </label>
+            </div>
             <label className="field">
-              <span>Ensemble</span>
-              <select
-                value={assignmentEnsembleId}
-                onChange={(event) => setAssignmentEnsembleId(event.target.value)}
-              >
-                <option value="">Choose ensemble</option>
-                {displayedEnsembles.map((ensemble) => (
-                  <option key={ensemble.ensembleId} value={ensemble.ensembleId}>
-                    {ensemble.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Due date</span>
+              <span>Title</span>
               <input
-                type="date"
-                value={assignmentDueDate}
-                onChange={(event) => setAssignmentDueDate(event.target.value)}
+                value={assignmentTitle}
+                onChange={(event) => setAssignmentTitle(event.target.value)}
+                placeholder="Rehearse measure 12-28"
               />
             </label>
-          </div>
-          <label className="field">
-            <span>Title</span>
-            <input
-              value={assignmentTitle}
-              onChange={(event) => setAssignmentTitle(event.target.value)}
-              placeholder="Rehearse measure 12-28"
-            />
-          </label>
-          <label className="field">
-            <span>Description</span>
-            <textarea
-              value={assignmentDescription}
-              onChange={(event) => setAssignmentDescription(event.target.value)}
-              placeholder="What members should practice"
-              rows={3}
-            />
-          </label>
-          <div className="form-actions">
-            <button className="button button-primary" type="submit" disabled={formBusy}>
-              Save assignment
-            </button>
-          </div>
-        </form>
+            <label className="field">
+              <span>Description</span>
+              <textarea
+                value={assignmentDescription}
+                onChange={(event) => setAssignmentDescription(event.target.value)}
+                placeholder="What members should practice"
+                rows={3}
+              />
+            </label>
+            <div className="form-actions">
+              <button className="button button-primary" type="submit" disabled={formBusy}>
+                Save assignment
+              </button>
+            </div>
+          </form>
+        ) : (
+          <article className="panel">
+            <h3>Assigned to you</h3>
+            <p className="muted-copy">Use your section feed to see what needs practice next.</p>
+          </article>
+        )}
 
         <div className="ensemble-list">
           {visibleAssignments.map((assignment) => (
@@ -1614,8 +1690,12 @@ function App() {
       <section className="section" id="submissions">
         <div className="section-header">
           <div>
-            <h2>Submissions</h2>
-            <p>Upload a practice video and browse the current ensemble feed.</p>
+            <h2>{isDirectorMode ? "Submissions" : "My submissions"}</h2>
+            <p>
+              {isDirectorMode
+                ? "Upload a practice video and browse the current ensemble feed."
+                : "Upload your practice video and browse the section feed."}
+            </p>
           </div>
         </div>
 
@@ -1800,6 +1880,7 @@ function App() {
                             : item,
                         ),
                       );
+                      setFormMessage("Notification marked as read.");
                     }}
                     disabled={notification.isRead}
                   >
@@ -1821,53 +1902,72 @@ function App() {
         <div className="section-header">
           <div>
             <h2>Feedback</h2>
-            <p>Review a submission and add feedback for the member.</p>
+            <p>
+              {isDirectorMode
+                ? "Review a submission and add feedback for the member."
+                : "Read feedback left on your submissions."}
+            </p>
           </div>
         </div>
 
-        <form className="panel form-panel" onSubmit={handleReviewSubmit}>
-          <div className="form-grid">
+        {isDirectorMode ? (
+          <form className="panel form-panel" onSubmit={handleReviewSubmit}>
+            <div className="form-grid">
+              <label className="field">
+                <span>Submission</span>
+                <select
+                  value={reviewSubmissionId}
+                  onChange={(event) => setReviewSubmissionId(event.target.value)}
+                >
+                  <option value="">Choose submission</option>
+                  {visibleSubmissions.map((submission) => (
+                    <option key={submission.submissionId} value={submission.submissionId}>
+                      {submission.submissionId}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Status</span>
+                <select
+                  value={reviewStatus}
+                  onChange={(event) => setReviewStatus(event.target.value)}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="needs_work">Needs work</option>
+                </select>
+              </label>
+            </div>
             <label className="field">
-              <span>Submission</span>
-              <select
-                value={reviewSubmissionId}
-                onChange={(event) => setReviewSubmissionId(event.target.value)}
-              >
-                <option value="">Choose submission</option>
-                {visibleSubmissions.map((submission) => (
-                  <option key={submission.submissionId} value={submission.submissionId}>
-                    {submission.submissionId}
-                  </option>
-                ))}
-              </select>
+              <span>Feedback</span>
+              <textarea
+                value={reviewFeedback}
+                onChange={(event) => setReviewFeedback(event.target.value)}
+                placeholder="Add comments for the member"
+                rows={3}
+              />
             </label>
-            <label className="field">
-              <span>Status</span>
-              <select
-                value={reviewStatus}
-                onChange={(event) => setReviewStatus(event.target.value)}
-              >
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="needs_work">Needs work</option>
-              </select>
-            </label>
-          </div>
-          <label className="field">
-            <span>Feedback</span>
-            <textarea
-              value={reviewFeedback}
-              onChange={(event) => setReviewFeedback(event.target.value)}
-              placeholder="Add comments for the member"
-              rows={3}
-            />
-          </label>
-          <div className="form-actions">
-            <button className="button button-primary" type="submit" disabled={formBusy}>
-              Save feedback
-            </button>
-          </div>
-        </form>
+            <div className="form-actions">
+              <button className="button button-primary" type="submit" disabled={formBusy}>
+                Save feedback
+              </button>
+            </div>
+          </form>
+        ) : (
+          <article className="panel">
+            <h3>Latest feedback</h3>
+            {selectedSubmission ? (
+              <>
+                <p className="muted-copy">Submission: {selectedSubmission.submissionId}</p>
+                <p>{selectedSubmission.feedback || "No feedback yet."}</p>
+                <p className="muted-copy">Status: {selectedSubmission.reviewStatus}</p>
+              </>
+            ) : (
+              <p>No submission selected yet.</p>
+            )}
+          </article>
+        )}
       </section>
 
       <section className="section" id="media">
@@ -1906,10 +2006,16 @@ function App() {
 
       <section className="section">
         <div className="panel panel-accent">
-          <h2>Status</h2>
-          <p>{formMessage}</p>
+          <h2>Recent activity</h2>
+          <p>{formMessage || "Ready."}</p>
         </div>
       </section>
+
+      {toastMessage ? (
+        <div className={`toast toast-${toastKind}`} role="status" aria-live="polite">
+          {toastMessage}
+        </div>
+      ) : null}
 
       </div>
     </main>

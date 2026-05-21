@@ -227,6 +227,78 @@ ul {
   align-items: start;
 }
 
+.account-card {
+  display: grid;
+  gap: 18px;
+}
+
+.account-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.account-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.avatar-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: white;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 14px 30px rgba(47, 125, 103, 0.22);
+}
+
+.avatar-circle-large {
+  width: 88px;
+  height: 88px;
+  font-size: 1.85rem;
+}
+
+.profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.mini-form {
+  display: grid;
+  gap: 14px;
+}
+
+.toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 30;
+  min-width: min(92vw, 360px);
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+  font-weight: 600;
+}
+
+.toast-success {
+  border-color: rgba(47, 125, 103, 0.28);
+}
+
+.toast-error {
+  border-color: rgba(181, 76, 76, 0.28);
+}
+
 .section {
   margin-top: 32px;
 }
