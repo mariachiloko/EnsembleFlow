@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 3: frontend wiring and product shell.
+Phase 4: auth-ready workflows and deployable handlers.
 
 ## Project Standards
 
@@ -47,11 +47,13 @@ Phase 3: frontend wiring and product shell.
 - Added Terraform resources for Cognito, DynamoDB, S3, Lambda, and API Gateway.
 - Initialized Terraform and generated the lock file.
 - Added a dashboard-style frontend shell with backend health awareness.
+- Added real profile, ensemble, and upload handler logic.
+- Added form-based frontend workflows that can use a Cognito token.
 
 ## What Still Needs To Happen
 
-- Add the first real profile and ensemble CRUD handlers.
-- Add upload URL generation.
-- Wire the frontend to the upload flow.
-- Add the first implementation phase for assignments and submissions.
 - Wire the frontend to Cognito and the real backend routes.
+- Add actual Cognito sign-in UX.
+- Add assignment and submission routes.
+- Add submission review and feedback flow.
+- Document the Lambda folder install step for self-hosted deploys.

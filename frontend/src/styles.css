@@ -223,6 +223,79 @@ ul {
   margin-bottom: 12px;
 }
 
+.form-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field span {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(31, 42, 40, 0.16);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text);
+  font: inherit;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 112px;
+}
+
+.field input:focus,
+.field textarea:focus {
+  outline: 2px solid rgba(47, 125, 103, 0.25);
+  border-color: rgba(47, 125, 103, 0.32);
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.button {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.button-primary {
+  background: var(--accent);
+  color: white;
+}
+
+.button-secondary {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text);
+  border: 1px solid rgba(31, 42, 40, 0.14);
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
 @media (max-width: 920px) {
   .hero-grid,
   .card-grid,
@@ -230,6 +303,10 @@ ul {
   .section-header {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
   }
 
   .section-meta {

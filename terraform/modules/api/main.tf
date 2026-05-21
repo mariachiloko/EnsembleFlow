@@ -4,7 +4,7 @@ locals {
 
 data "archive_file" "handler_zip" {
   type        = "zip"
-  source_file = "${path.module}/../../functions/api/index.js"
+  source_dir  = "${path.module}/../../functions/api"
   output_path = "${path.module}/api-handler.zip"
 }
 
@@ -146,9 +146,11 @@ resource "aws_apigatewayv2_route" "health" {
 
 locals {
   protected_routes = {
+    "GET /profiles" = {}
     "POST /profiles" = {}
     "GET /profiles/{userId}" = {}
     "PUT /profiles/{userId}" = {}
+    "GET /ensembles" = {}
     "POST /ensembles" = {}
     "GET /ensembles/{ensembleId}" = {}
     "PUT /ensembles/{ensembleId}" = {}
