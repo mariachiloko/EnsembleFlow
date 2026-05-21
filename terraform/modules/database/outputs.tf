@@ -18,3 +18,12 @@ output "uploads_table_name" {
   description = "DynamoDB table for upload metadata."
 }
 
+output "assignments_table_name" {
+  value       = aws_dynamodb_table.assignments.name
+  description = "DynamoDB table for assignments."
+}
+
+output "submissions_table_name" {
+  value       = aws_dynamodb_table.submissions.name
+  description = "DynamoDB table for submissions."
+}

@@ -268,7 +268,8 @@ ul {
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   width: 100%;
   padding: 14px 16px;
   border-radius: 16px;
@@ -284,7 +285,8 @@ ul {
 }
 
 .field input:focus,
-.field textarea:focus {
+.field textarea:focus,
+.field select:focus {
   outline: 2px solid rgba(47, 125, 103, 0.25);
   border-color: rgba(47, 125, 103, 0.32);
 }

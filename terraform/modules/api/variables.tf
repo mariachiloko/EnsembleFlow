@@ -48,8 +48,17 @@ variable "uploads_table_name" {
   description = "DynamoDB table for uploads."
 }
 
+variable "assignments_table_name" {
+  type        = string
+  description = "DynamoDB table for assignments."
+}
+
+variable "submissions_table_name" {
+  type        = string
+  description = "DynamoDB table for submissions."
+}
+
 variable "uploads_bucket_name" {
   type        = string
   description = "S3 bucket used for uploads."
 }
-

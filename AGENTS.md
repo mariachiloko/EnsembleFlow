@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 5: hosted authentication and self-hosted deployment wiring.
+Phase 6: rehearsal workflow and feedback loop.
 
 ## Project Standards
 
@@ -51,9 +51,10 @@ Phase 5: hosted authentication and self-hosted deployment wiring.
 - Added form-based frontend workflows that can use a Cognito token.
 - Added Cognito Hosted UI settings and a PKCE sign-in flow.
 - Added auth-aware frontend controls and session persistence.
+- Added assignment, submission, and feedback workflows.
 
 ## What Still Needs To Happen
 
-- Add assignment and submission routes.
-- Build the reviewer/feedback workflow.
-- Add submission review and feedback flow.
+- Tighten refresh-token and session-expiry handling if needed.
+- Decide whether to seed demo content for portfolio demos.
+- Expand to sections and membership management.

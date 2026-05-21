@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   apiUrl,
+  createAssignment,
   createEnsemble,
+  createSubmission,
   createUploadPresign,
   fetchHealthSignal,
   getCurrentProfile,
+  listAssignments,
   listEnsembles,
+  listSubmissions,
+  updateSubmission,
   upsertProfile,
 } from "./lib/api";
 import {
@@ -69,6 +74,27 @@ function App() {
     description: string;
     logoKey: string;
   }>>([]);
+  const [remoteAssignments, setRemoteAssignments] = useState<Array<{
+    assignmentId: string;
+    ownerId: string;
+    ensembleId: string;
+    title: string;
+    description: string;
+    dueDate: string;
+    createdAt: string;
+    updatedAt: string;
+  }>>([]);
+  const [remoteSubmissions, setRemoteSubmissions] = useState<Array<{
+    submissionId: string;
+    assignmentId: string;
+    ownerId: string;
+    videoKey: string;
+    notes: string;
+    reviewStatus: string;
+    feedback: string;
+    createdAt: string;
+    updatedAt: string;
+  }>>([]);
   const [displayName, setDisplayName] = useState(placeholderProfile.displayName);
   const [email, setEmail] = useState(placeholderProfile.email);
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
@@ -77,6 +103,16 @@ function App() {
   const [ensembleLogoFile, setEnsembleLogoFile] = useState<File | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadEnsembleId, setUploadEnsembleId] = useState("");
+  const [assignmentTitle, setAssignmentTitle] = useState("New assignment");
+  const [assignmentDescription, setAssignmentDescription] = useState("");
+  const [assignmentDueDate, setAssignmentDueDate] = useState("");
+  const [assignmentEnsembleId, setAssignmentEnsembleId] = useState("");
+  const [submissionAssignmentId, setSubmissionAssignmentId] = useState("");
+  const [submissionNotes, setSubmissionNotes] = useState("");
+  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+  const [reviewSubmissionId, setReviewSubmissionId] = useState("");
+  const [reviewStatus, setReviewStatus] = useState("approved");
+  const [reviewFeedback, setReviewFeedback] = useState("");
   const [formMessage, setFormMessage] = useState("Use Cognito sign-in or paste a token to try the API forms.");
   const [authMessage, setAuthMessage] = useState("Not signed in.");
   const [formBusy, setFormBusy] = useState(false);
@@ -145,13 +181,18 @@ function App() {
       if (!accessToken) {
         setProfile(placeholderProfile);
         setRemoteEnsembles([]);
+        setRemoteAssignments([]);
+        setRemoteSubmissions([]);
         return;
       }
 
       try {
-        const [profileResponse, ensemblesResponse] = await Promise.all([
+        const [profileResponse, ensemblesResponse, assignmentsResponse, submissionsResponse] =
+          await Promise.all([
           getCurrentProfile(accessToken),
           listEnsembles(accessToken),
+          listAssignments(accessToken),
+          listSubmissions(accessToken),
         ]);
 
         if (cancelled) return;
@@ -163,6 +204,8 @@ function App() {
         }
 
         setRemoteEnsembles(ensemblesResponse.ensembles);
+        setRemoteAssignments(assignmentsResponse.assignments);
+        setRemoteSubmissions(submissionsResponse.submissions);
       } catch (error) {
         if (!cancelled) {
           setFormMessage(error instanceof Error ? error.message : "Could not load workspace data.");
@@ -351,6 +394,100 @@ function App() {
     }
   }
 
+  async function handleAssignmentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!assignmentEnsembleId) {
+      setFormMessage("Choose an ensemble before creating an assignment.");
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Saving assignment...");
+
+    try {
+      const result = await createAssignment(accessToken, {
+        ensembleId: assignmentEnsembleId,
+        title: assignmentTitle,
+        description: assignmentDescription,
+        dueDate: assignmentDueDate,
+      });
+
+      setRemoteAssignments((current) => [result.assignment, ...current]);
+      setFormMessage("Assignment saved.");
+      setAssignmentTitle("New assignment");
+      setAssignmentDescription("");
+      setAssignmentDueDate("");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Assignment save failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function handleSubmissionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!submissionAssignmentId) {
+      setFormMessage("Choose an assignment before uploading a submission.");
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Saving submission...");
+
+    try {
+      let videoKey = "";
+
+      if (submissionFile) {
+        videoKey = await uploadFileToS3(submissionFile, "submission-video");
+      }
+
+      const result = await createSubmission(accessToken, {
+        assignmentId: submissionAssignmentId,
+        notes: submissionNotes,
+        videoKey,
+      });
+
+      setRemoteSubmissions((current) => [result.submission, ...current]);
+      setFormMessage("Submission saved.");
+      setSubmissionFile(null);
+      setSubmissionNotes("");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Submission save failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function handleReviewSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!reviewSubmissionId) {
+      setFormMessage("Choose a submission before saving feedback.");
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Saving review...");
+
+    try {
+      const result = await updateSubmission(accessToken, reviewSubmissionId, {
+        reviewStatus,
+        feedback: reviewFeedback,
+      });
+
+      setRemoteSubmissions((current) =>
+        current.map((submission) =>
+          submission.submissionId === result.submission.submissionId ? result.submission : submission,
+        ),
+      );
+      setFormMessage("Feedback saved.");
+      setReviewFeedback("");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Review save failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
   return (
     <main className="page-shell">
       <section className="hero">
@@ -443,33 +580,33 @@ function App() {
           </div>
 
           <form className="panel form-panel" onSubmit={handleApplyToken}>
-          <label className="field">
-            <span>Manual access token</span>
-            <textarea
-              value={tokenDraft}
-              onChange={(event) => setTokenDraft(event.target.value)}
-              placeholder="Paste Cognito access token here"
-              rows={4}
-            />
-          </label>
-          <div className="form-actions">
-            <button className="button button-primary" type="submit">
-              Use token
-            </button>
-            <button
-              className="button button-secondary"
-              type="button"
-              onClick={() => {
-                setTokenDraft("");
-                setAccessToken("");
-                setAuthSession(null);
-                setAuthMessage("Manual token cleared.");
-                setFormMessage("Token cleared. Preview mode restored.");
-              }}
-            >
-              Clear
-            </button>
-          </div>
+            <label className="field">
+              <span>Manual access token</span>
+              <textarea
+                value={tokenDraft}
+                onChange={(event) => setTokenDraft(event.target.value)}
+                placeholder="Paste Cognito access token here"
+                rows={4}
+              />
+            </label>
+            <div className="form-actions">
+              <button className="button button-primary" type="submit">
+                Use token
+              </button>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => {
+                  setTokenDraft("");
+                  setAccessToken("");
+                  setAuthSession(null);
+                  setAuthMessage("Manual token cleared.");
+                  setFormMessage("Token cleared. Preview mode restored.");
+                }}
+              >
+                Clear
+              </button>
+            </div>
           </form>
         </div>
       </section>
@@ -576,6 +713,193 @@ function App() {
             </article>
           ))}
         </div>
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <div>
+            <h2>Assignments</h2>
+            <p>Create practice tasks for a specific ensemble and due date.</p>
+          </div>
+        </div>
+
+        <form className="panel form-panel" onSubmit={handleAssignmentSubmit}>
+          <div className="form-grid">
+            <label className="field">
+              <span>Ensemble</span>
+              <select
+                value={assignmentEnsembleId}
+                onChange={(event) => setAssignmentEnsembleId(event.target.value)}
+              >
+                <option value="">Choose ensemble</option>
+                {displayedEnsembles.map((ensemble) => (
+                  <option key={ensemble.ensembleId} value={ensemble.ensembleId}>
+                    {ensemble.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Due date</span>
+              <input
+                type="date"
+                value={assignmentDueDate}
+                onChange={(event) => setAssignmentDueDate(event.target.value)}
+              />
+            </label>
+          </div>
+          <label className="field">
+            <span>Title</span>
+            <input
+              value={assignmentTitle}
+              onChange={(event) => setAssignmentTitle(event.target.value)}
+              placeholder="Rehearse measure 12-28"
+            />
+          </label>
+          <label className="field">
+            <span>Description</span>
+            <textarea
+              value={assignmentDescription}
+              onChange={(event) => setAssignmentDescription(event.target.value)}
+              placeholder="What members should practice"
+              rows={3}
+            />
+          </label>
+          <div className="form-actions">
+            <button className="button button-primary" type="submit" disabled={formBusy}>
+              Save assignment
+            </button>
+          </div>
+        </form>
+
+        <div className="ensemble-list">
+          {remoteAssignments.map((assignment) => (
+            <article className="ensemble-row panel" key={assignment.assignmentId}>
+              <div>
+                <p className="ensemble-role">Ensemble ID: {assignment.ensembleId}</p>
+                <h3>{assignment.title}</h3>
+                <p className="ensemble-status">{assignment.description || "No description yet."}</p>
+              </div>
+              <p className="ensemble-role">Due {assignment.dueDate || "unspecified"}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <div>
+            <h2>Submissions</h2>
+            <p>Upload a practice video and attach notes for a specific assignment.</p>
+          </div>
+        </div>
+
+        <form className="panel form-panel" onSubmit={handleSubmissionSubmit}>
+          <div className="form-grid">
+            <label className="field">
+              <span>Assignment</span>
+              <select
+                value={submissionAssignmentId}
+                onChange={(event) => setSubmissionAssignmentId(event.target.value)}
+              >
+                <option value="">Choose assignment</option>
+                {remoteAssignments.map((assignment) => (
+                  <option key={assignment.assignmentId} value={assignment.assignmentId}>
+                    {assignment.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Video file</span>
+              <input
+                type="file"
+                accept="video/*"
+                onChange={(event) => setSubmissionFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
+          <label className="field">
+            <span>Notes</span>
+            <textarea
+              value={submissionNotes}
+              onChange={(event) => setSubmissionNotes(event.target.value)}
+              placeholder="What you practiced and anything to review"
+              rows={3}
+            />
+          </label>
+          <div className="form-actions">
+            <button className="button button-primary" type="submit" disabled={formBusy}>
+              Save submission
+            </button>
+          </div>
+        </form>
+
+        <div className="ensemble-list">
+          {remoteSubmissions.map((submission) => (
+            <article className="ensemble-row panel" key={submission.submissionId}>
+              <div>
+                <p className="ensemble-role">Assignment: {submission.assignmentId}</p>
+                <h3>{submission.reviewStatus}</h3>
+                <p className="ensemble-status">{submission.notes || "No notes yet."}</p>
+              </div>
+              <p className="ensemble-role">{submission.videoKey ? "Video uploaded" : "No video yet"}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <div>
+            <h2>Feedback</h2>
+            <p>Review a submission and add feedback for the member.</p>
+          </div>
+        </div>
+
+        <form className="panel form-panel" onSubmit={handleReviewSubmit}>
+          <div className="form-grid">
+            <label className="field">
+              <span>Submission</span>
+              <select
+                value={reviewSubmissionId}
+                onChange={(event) => setReviewSubmissionId(event.target.value)}
+              >
+                <option value="">Choose submission</option>
+                {remoteSubmissions.map((submission) => (
+                  <option key={submission.submissionId} value={submission.submissionId}>
+                    {submission.submissionId}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Status</span>
+              <select
+                value={reviewStatus}
+                onChange={(event) => setReviewStatus(event.target.value)}
+              >
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="needs_work">Needs work</option>
+              </select>
+            </label>
+          </div>
+          <label className="field">
+            <span>Feedback</span>
+            <textarea
+              value={reviewFeedback}
+              onChange={(event) => setReviewFeedback(event.target.value)}
+              placeholder="Add comments for the member"
+              rows={3}
+            />
+          </label>
+          <div className="form-actions">
+            <button className="button button-primary" type="submit" disabled={formBusy}>
+              Save feedback
+            </button>
+          </div>
+        </form>
       </section>
 
       <section className="section">

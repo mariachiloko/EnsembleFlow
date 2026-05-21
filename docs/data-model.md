@@ -63,10 +63,14 @@ Typical fields:
 
 ## Future Records
 
-Later phases will add:
+Implemented next:
 
 - assignments
 - submissions
 - comments and feedback
-- progress tracking
 
+Later phases may add:
+
+- progress tracking
+- section-specific task lists
+- attendance history

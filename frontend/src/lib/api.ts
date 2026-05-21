@@ -84,6 +84,26 @@ export type UploadPayload = {
   ensembleId?: string;
 };
 
+export type AssignmentPayload = {
+  ensembleId: string;
+  title: string;
+  description?: string;
+  dueDate: string;
+};
+
+export type SubmissionPayload = {
+  assignmentId: string;
+  videoKey?: string;
+  notes?: string;
+};
+
+export type SubmissionReviewPayload = {
+  reviewStatus?: string;
+  feedback?: string;
+  videoKey?: string;
+  notes?: string;
+};
+
 export async function getCurrentProfile(token: string) {
   return request<{ profile: ProfileRecord | null }>("/profiles", { token });
 }
@@ -133,5 +153,115 @@ export async function createUploadPresign(token: string, payload: UploadPayload)
     token,
     body: payload,
     method: "POST",
+  });
+}
+
+export async function listAssignments(token: string) {
+  return request<{
+    assignments: Array<{
+      assignmentId: string;
+      ownerId: string;
+      ensembleId: string;
+      title: string;
+      description: string;
+      dueDate: string;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }>("/assignments", { token });
+}
+
+export async function createAssignment(token: string, payload: AssignmentPayload) {
+  return request<{
+    assignment: {
+      assignmentId: string;
+      ownerId: string;
+      ensembleId: string;
+      title: string;
+      description: string;
+      dueDate: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>("/assignments", {
+    token,
+    body: payload,
+    method: "POST",
+  });
+}
+
+export async function updateAssignment(
+  token: string,
+  assignmentId: string,
+  payload: Partial<AssignmentPayload>,
+) {
+  return request<{ assignment: { assignmentId: string } }>(
+    `/assignments/${assignmentId}`,
+    {
+      token,
+      body: payload,
+      method: "PUT",
+    },
+  );
+}
+
+export async function listSubmissions(token: string, assignmentId?: string) {
+  const query = assignmentId ? `?assignmentId=${encodeURIComponent(assignmentId)}` : "";
+  return request<{
+    submissions: Array<{
+      submissionId: string;
+      assignmentId: string;
+      ownerId: string;
+      videoKey: string;
+      notes: string;
+      reviewStatus: string;
+      feedback: string;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }>(`/submissions${query}`, { token });
+}
+
+export async function createSubmission(token: string, payload: SubmissionPayload) {
+  return request<{
+    submission: {
+      submissionId: string;
+      assignmentId: string;
+      ownerId: string;
+      videoKey: string;
+      notes: string;
+      reviewStatus: string;
+      feedback: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>("/submissions", {
+    token,
+    body: payload,
+    method: "POST",
+  });
+}
+
+export async function updateSubmission(
+  token: string,
+  submissionId: string,
+  payload: SubmissionReviewPayload,
+) {
+  return request<{
+    submission: {
+      submissionId: string;
+      assignmentId: string;
+      ownerId: string;
+      videoKey: string;
+      notes: string;
+      reviewStatus: string;
+      feedback: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>(`/submissions/${submissionId}`, {
+    token,
+    body: payload,
+    method: "PUT",
   });
 }

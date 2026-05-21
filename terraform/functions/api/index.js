@@ -17,6 +17,8 @@ const env = {
   ensemblesTableName: process.env.ENSEMBLES_TABLE_NAME,
   membershipsTableName: process.env.MEMBERSHIPS_TABLE_NAME,
   uploadsTableName: process.env.UPLOADS_TABLE_NAME,
+  assignmentsTableName: process.env.ASSIGNMENTS_TABLE_NAME,
+  submissionsTableName: process.env.SUBMISSIONS_TABLE_NAME,
   uploadsBucketName: process.env.UPLOADS_BUCKET_NAME,
 };
 
@@ -80,6 +82,35 @@ const safeEnsemble = (item) =>
         name: item.name,
         description: item.description ?? "",
         logoKey: item.logoKey ?? "",
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }
+    : null;
+
+const safeAssignment = (item) =>
+  item
+    ? {
+        assignmentId: item.assignmentId,
+        ownerId: item.ownerId,
+        ensembleId: item.ensembleId,
+        title: item.title,
+        description: item.description ?? "",
+        dueDate: item.dueDate ?? "",
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }
+    : null;
+
+const safeSubmission = (item) =>
+  item
+    ? {
+        submissionId: item.submissionId,
+        assignmentId: item.assignmentId,
+        ownerId: item.ownerId,
+        videoKey: item.videoKey ?? "",
+        notes: item.notes ?? "",
+        reviewStatus: item.reviewStatus ?? "pending",
+        feedback: item.feedback ?? "",
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       }
@@ -327,6 +358,313 @@ const presignUpload = async (event) => {
   });
 };
 
+const listAssignments = async (event) => {
+  const userId = getUserId(event);
+  const auth = ensureUser(event, userId);
+  if (!auth.ok) return auth.response;
+
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName: env.assignmentsTableName,
+      IndexName: "ownerId-index",
+      KeyConditionExpression: "ownerId = :ownerId",
+      ExpressionAttributeValues: {
+        ":ownerId": userId,
+      },
+    }),
+  );
+
+  return response(200, {
+    assignments: (result.Items || []).map(safeAssignment),
+  });
+};
+
+const getAssignment = async (event) => {
+  const assignmentId = event.pathParameters?.assignmentId;
+  if (!assignmentId) {
+    return response(400, { message: "Missing assignmentId" });
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.assignmentsTableName,
+      Key: { assignmentId },
+    }),
+  );
+
+  if (!result.Item) {
+    return response(404, { message: "Assignment not found" });
+  }
+
+  const auth = ensureUser(event, result.Item.ownerId);
+  if (!auth.ok) return auth.response;
+
+  return response(200, {
+    assignment: safeAssignment(result.Item),
+  });
+};
+
+const createAssignment = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  const assignmentId = body.assignmentId || crypto.randomUUID();
+  const item = {
+    assignmentId,
+    ownerId: auth.userId,
+    ensembleId: body.ensembleId || "",
+    title: body.title || "",
+    description: body.description || "",
+    dueDate: body.dueDate || "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.assignmentsTableName,
+      Item: item,
+    }),
+  );
+
+  return response(201, {
+    assignment: safeAssignment(item),
+  });
+};
+
+const updateAssignment = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const assignmentId = event.pathParameters?.assignmentId;
+  if (!assignmentId) {
+    return response(400, { message: "Missing assignmentId" });
+  }
+
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: env.assignmentsTableName,
+      Key: { assignmentId },
+    }),
+  );
+
+  if (!existing.Item) {
+    return response(404, { message: "Assignment not found" });
+  }
+
+  const auth = ensureUser(event, existing.Item.ownerId);
+  if (!auth.ok) return auth.response;
+
+  const item = {
+    ...existing.Item,
+    ensembleId: body.ensembleId ?? existing.Item.ensembleId ?? "",
+    title: body.title ?? existing.Item.title ?? "",
+    description: body.description ?? existing.Item.description ?? "",
+    dueDate: body.dueDate ?? existing.Item.dueDate ?? "",
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.assignmentsTableName,
+      Item: item,
+    }),
+  );
+
+  return response(200, {
+    assignment: safeAssignment(item),
+  });
+};
+
+const listSubmissions = async (event) => {
+  const userId = getUserId(event);
+  const auth = ensureUser(event, userId);
+  if (!auth.ok) return auth.response;
+
+  const assignmentId = event.queryStringParameters?.assignmentId;
+  const query = assignmentId
+    ? new QueryCommand({
+        TableName: env.submissionsTableName,
+        IndexName: "assignmentId-index",
+        KeyConditionExpression: "assignmentId = :assignmentId",
+        ExpressionAttributeValues: {
+          ":assignmentId": assignmentId,
+        },
+      })
+    : new QueryCommand({
+        TableName: env.submissionsTableName,
+        IndexName: "ownerId-index",
+        KeyConditionExpression: "ownerId = :ownerId",
+        ExpressionAttributeValues: {
+          ":ownerId": userId,
+        },
+      });
+
+  const result = await ddb.send(query);
+
+  return response(200, {
+    submissions: (result.Items || []).map(safeSubmission),
+  });
+};
+
+const getSubmission = async (event) => {
+  const submissionId = event.pathParameters?.submissionId;
+  if (!submissionId) {
+    return response(400, { message: "Missing submissionId" });
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.submissionsTableName,
+      Key: { submissionId },
+    }),
+  );
+
+  if (!result.Item) {
+    return response(404, { message: "Submission not found" });
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  const assignment = await ddb.send(
+    new GetCommand({
+      TableName: env.assignmentsTableName,
+      Key: { assignmentId: result.Item.assignmentId },
+    }),
+  );
+
+  if (!assignment.Item) {
+    return response(404, { message: "Assignment not found" });
+  }
+
+  const isOwner = result.Item.ownerId === auth.userId;
+  const isReviewer = assignment.Item.ownerId === auth.userId;
+  if (!isOwner && !isReviewer) {
+    return response(403, { message: "You can only access your own submissions" });
+  }
+
+  return response(200, {
+    submission: safeSubmission(result.Item),
+  });
+};
+
+const createSubmission = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  const assignment = await ddb.send(
+    new GetCommand({
+      TableName: env.assignmentsTableName,
+      Key: { assignmentId: body.assignmentId || "" },
+    }),
+  );
+
+  if (!assignment.Item) {
+    return response(404, { message: "Assignment not found" });
+  }
+
+  const submissionId = body.submissionId || crypto.randomUUID();
+  const item = {
+    submissionId,
+    assignmentId: assignment.Item.assignmentId,
+    ownerId: auth.userId,
+    videoKey: body.videoKey || "",
+    notes: body.notes || "",
+    reviewStatus: "pending",
+    feedback: "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.submissionsTableName,
+      Item: item,
+    }),
+  );
+
+  return response(201, {
+    submission: safeSubmission(item),
+  });
+};
+
+const updateSubmission = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const submissionId = event.pathParameters?.submissionId;
+  if (!submissionId) {
+    return response(400, { message: "Missing submissionId" });
+  }
+
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: env.submissionsTableName,
+      Key: { submissionId },
+    }),
+  );
+
+  if (!existing.Item) {
+    return response(404, { message: "Submission not found" });
+  }
+
+  const assignment = await ddb.send(
+    new GetCommand({
+      TableName: env.assignmentsTableName,
+      Key: { assignmentId: existing.Item.assignmentId },
+    }),
+  );
+
+  if (!assignment.Item) {
+    return response(404, { message: "Assignment not found" });
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  const isOwner = existing.Item.ownerId === auth.userId;
+  const isReviewer = assignment.Item.ownerId === auth.userId;
+
+  if (!isOwner && !isReviewer) {
+    return response(403, { message: "You can only update your own submissions" });
+  }
+
+  const item = {
+    ...existing.Item,
+    videoKey: body.videoKey ?? existing.Item.videoKey ?? "",
+    notes: body.notes ?? existing.Item.notes ?? "",
+    reviewStatus: body.reviewStatus ?? existing.Item.reviewStatus ?? "pending",
+    feedback: isReviewer ? body.feedback ?? existing.Item.feedback ?? "" : existing.Item.feedback ?? "",
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.submissionsTableName,
+      Item: item,
+    }),
+  );
+
+  return response(200, {
+    submission: safeSubmission(item),
+  });
+};
+
 exports.handler = async (event) => {
   const key = routeKey(event);
 
@@ -340,6 +678,14 @@ exports.handler = async (event) => {
   if (key === "GET /ensembles/{ensembleId}") return getEnsemble(event);
   if (key === "PUT /ensembles/{ensembleId}") return updateEnsemble(event);
   if (key === "POST /uploads/presign") return presignUpload(event);
+  if (key === "GET /assignments") return listAssignments(event);
+  if (key === "POST /assignments") return createAssignment(event);
+  if (key === "GET /assignments/{assignmentId}") return getAssignment(event);
+  if (key === "PUT /assignments/{assignmentId}") return updateAssignment(event);
+  if (key === "GET /submissions") return listSubmissions(event);
+  if (key === "POST /submissions") return createSubmission(event);
+  if (key === "GET /submissions/{submissionId}") return getSubmission(event);
+  if (key === "PUT /submissions/{submissionId}") return updateSubmission(event);
 
   return response(404, {
     message: "Not found",
