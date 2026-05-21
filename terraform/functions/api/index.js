@@ -29,6 +29,16 @@ const env = {
 
 const privilegedRoles = new Set(["director", "co_director", "leader"]);
 
+const normalizeMembershipRole = (role, allowPrivilegedRoles) => {
+  const requestedRole = typeof role === "string" && role.trim() ? role.trim() : "member";
+
+  if (privilegedRoles.has(requestedRole)) {
+    return allowPrivilegedRoles ? requestedRole : "member";
+  }
+
+  return requestedRole;
+};
+
 const response = (statusCode, body) => ({
   statusCode,
   headers: {
@@ -919,7 +929,7 @@ const createMembership = async (event) => {
   const item = {
     userId: body.userId || "",
     ensembleId: ensembleAccess.ensemble.ensembleId,
-    role: body.role || "member",
+    role: normalizeMembershipRole(body.role, true),
     sectionId,
     sectionName,
     joinedAt: nowIso(),
@@ -1076,7 +1086,7 @@ const createInvitation = async (event) => {
     createdBy: auth.userId,
     inviteeEmail,
     inviteeUserId,
-    role: body.role || "member",
+    role: normalizeMembershipRole(body.role, hasManagementAccess(access)),
     sectionId: body.sectionId || "",
     sectionName: body.sectionName || "",
     status: "pending",
@@ -1155,7 +1165,7 @@ const acceptInvitation = async (event) => {
   const membershipItem = {
     userId: targetUserId,
     ensembleId: invitation.ensembleId,
-    role: invitation.role || "member",
+    role: normalizeMembershipRole(invitation.role, hasManagementAccess(access)),
     sectionId: invitation.sectionId || existingMembership?.sectionId || "",
     sectionName: invitation.sectionName || existingMembership?.sectionName || "",
     joinedAt: existingMembership?.joinedAt || nowIso(),

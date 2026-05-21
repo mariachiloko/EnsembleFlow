@@ -61,9 +61,11 @@ Phase 11: authenticated workspace and ensemble approval flow.
 - Wired the frontend to the live Cognito and API outputs in a local-only env file.
 - Added a sign-in-first app gate so the workspace is hidden until a user is authenticated.
 - Added ensemble code requests, director approval, co-director access, and member removal flows.
+- Restricted privileged roles so director, co-director, and leader assignments are made only by existing management.
 
 ## What Still Needs To Happen
 
 - Tighten refresh-token and session-expiry handling if needed.
 - Decide whether to keep or replace the local-only live env file before wider sharing.
 - Decide whether to add a Google identity provider later, if a second login option is still desired.
+- Decide whether to add a separate private promotion flow for trusted members who should become directors later.

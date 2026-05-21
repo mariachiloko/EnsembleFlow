@@ -977,7 +977,7 @@ function App() {
             you can request access to an ensemble with a code and start using the workspace.
           </p>
           <p className="muted-copy">
-            Google sign-in can be added later by connecting a Google identity provider in Cognito.
+            Director and co-director access is assigned separately after sign-up.
           </p>
         </section>
 
@@ -1408,15 +1408,19 @@ function App() {
               </label>
               <label className="field">
                 <span>Role</span>
-                <select
-                  value={membershipRole}
-                  onChange={(event) => setMembershipRole(event.target.value)}
-                >
-                  <option value="member">Member</option>
-                  <option value="leader">Leader</option>
-                  <option value="co_director">Co-director</option>
-                  <option value="director">Director</option>
-                </select>
+                {isDirectorMode ? (
+                  <select
+                    value={membershipRole}
+                    onChange={(event) => setMembershipRole(event.target.value)}
+                  >
+                    <option value="member">Member</option>
+                    <option value="leader">Leader</option>
+                    <option value="co_director">Co-director</option>
+                    <option value="director">Director</option>
+                  </select>
+                ) : (
+                  <input value="Member" readOnly />
+                )}
               </label>
             </div>
             <label className="field">
