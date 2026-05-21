@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 10: live AWS deployment and verification.
+Phase 11: authenticated workspace and ensemble approval flow.
 
 ## Project Standards
 
@@ -59,9 +59,11 @@ Phase 10: live AWS deployment and verification.
 - Added deployment notes that call out when AWS credentials are needed.
 - Deployed the live AWS dev stack with Terraform and verified the API health route.
 - Wired the frontend to the live Cognito and API outputs in a local-only env file.
+- Added a sign-in-first app gate so the workspace is hidden until a user is authenticated.
+- Added ensemble code requests, director approval, co-director access, and member removal flows.
 
 ## What Still Needs To Happen
 
 - Tighten refresh-token and session-expiry handling if needed.
-- Add richer member lookup or invitation flow if needed.
 - Decide whether to keep or replace the local-only live env file before wider sharing.
+- Decide whether to add a Google identity provider later, if a second login option is still desired.

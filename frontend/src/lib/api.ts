@@ -77,6 +77,15 @@ export type EnsemblePayload = {
   logoKey?: string;
 };
 
+export type JoinRequestPayload = {
+  ensembleCode: string;
+  role?: string;
+  sectionId?: string;
+  sectionName?: string;
+  inviteeUserId?: string;
+  inviteeEmail?: string;
+};
+
 export type UploadPayload = {
   fileName: string;
   contentType: string;
@@ -157,6 +166,7 @@ export async function createEnsemble(token: string, payload: EnsemblePayload) {
       description: string;
       logoKey: string;
     };
+    accessCode: string;
   }>("/ensembles", {
     token,
     body: payload,
@@ -239,6 +249,13 @@ export async function createMembership(token: string, payload: MembershipPayload
     token,
     body: payload,
     method: "POST",
+  });
+}
+
+export async function removeMembership(token: string, userId: string, ensembleId: string) {
+  return request<{ ok: boolean }>(`/memberships/${userId}/${ensembleId}`, {
+    token,
+    method: "DELETE",
   });
 }
 
@@ -400,6 +417,68 @@ export async function createComment(token: string, payload: CommentPayload) {
   }>("/comments", {
     token,
     body: payload,
+    method: "POST",
+  });
+}
+
+export async function listJoinRequests(token: string, ensembleId: string) {
+  return request<{
+    invitations: Array<{
+      inviteCode: string;
+      ensembleId: string;
+      createdBy: string;
+      inviteeEmail: string;
+      inviteeUserId: string;
+      role: string;
+      sectionId: string;
+      sectionName: string;
+      status: string;
+      acceptedBy: string;
+      acceptedAt: string;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }>(`/invitations?ensembleId=${encodeURIComponent(ensembleId)}`, { token });
+}
+
+export async function requestJoin(token: string, payload: JoinRequestPayload) {
+  return request<{
+    invitation: {
+      inviteCode: string;
+      ensembleId: string;
+      createdBy: string;
+      inviteeEmail: string;
+      inviteeUserId: string;
+      role: string;
+      sectionId: string;
+      sectionName: string;
+      status: string;
+      acceptedBy: string;
+      acceptedAt: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>("/invitations", {
+    token,
+    body: payload,
+    method: "POST",
+  });
+}
+
+export async function approveJoinRequest(token: string, inviteCode: string) {
+  return request<{
+    membership: {
+      userId: string;
+      ensembleId: string;
+      role: string;
+      sectionId: string;
+      sectionName: string;
+      joinedAt: string;
+      updatedAt: string;
+    };
+  }>("/invitations/accept", {
+    token,
+    body: { inviteCode },
     method: "POST",
   });
 }

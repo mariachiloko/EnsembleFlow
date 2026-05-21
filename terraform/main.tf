@@ -43,6 +43,7 @@ module "api" {
   assignments_table_name   = module.database.assignments_table_name
   submissions_table_name   = module.database.submissions_table_name
   comments_table_name      = module.database.comments_table_name
+  invitations_table_name   = module.database.invitations_table_name
   notifications_table_name = module.database.notifications_table_name
   uploads_bucket_name      = module.storage.bucket_name
 }

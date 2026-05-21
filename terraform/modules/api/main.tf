@@ -52,6 +52,7 @@ resource "aws_iam_role_policy" "lambda" {
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.assignments_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.submissions_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.comments_table_name}",
+          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.invitations_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.notifications_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.users_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.ensembles_table_name}/index/*",
@@ -61,6 +62,7 @@ resource "aws_iam_role_policy" "lambda" {
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.assignments_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.submissions_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.comments_table_name}/index/*",
+          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.invitations_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.notifications_table_name}/index/*",
         ]
       },
@@ -109,6 +111,7 @@ resource "aws_lambda_function" "this" {
       ASSIGNMENTS_TABLE_NAME  = var.assignments_table_name
       SUBMISSIONS_TABLE_NAME  = var.submissions_table_name
       COMMENTS_TABLE_NAME     = var.comments_table_name
+      INVITATIONS_TABLE_NAME  = var.invitations_table_name
       NOTIFICATIONS_TABLE_NAME = var.notifications_table_name
       UPLOADS_BUCKET_NAME     = var.uploads_bucket_name
     }
@@ -187,6 +190,9 @@ locals {
     "PUT /submissions/{submissionId}" = {}
     "GET /comments" = {}
     "POST /comments" = {}
+    "GET /invitations" = {}
+    "POST /invitations" = {}
+    "POST /invitations/accept" = {}
     "GET /notifications" = {}
     "PUT /notifications/{notificationId}" = {}
   }

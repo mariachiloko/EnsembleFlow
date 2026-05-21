@@ -3,6 +3,7 @@ const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const {
   DynamoDBDocumentClient,
   GetCommand,
+  DeleteCommand,
   PutCommand,
   QueryCommand,
 } = require("@aws-sdk/lib-dynamodb");
@@ -21,9 +22,12 @@ const env = {
   assignmentsTableName: process.env.ASSIGNMENTS_TABLE_NAME,
   submissionsTableName: process.env.SUBMISSIONS_TABLE_NAME,
   commentsTableName: process.env.COMMENTS_TABLE_NAME,
+  invitationsTableName: process.env.INVITATIONS_TABLE_NAME,
   notificationsTableName: process.env.NOTIFICATIONS_TABLE_NAME,
   uploadsBucketName: process.env.UPLOADS_BUCKET_NAME,
 };
+
+const privilegedRoles = new Set(["director", "co_director", "leader"]);
 
 const response = (statusCode, body) => ({
   statusCode,
@@ -87,6 +91,14 @@ const safeEnsemble = (item) =>
         logoKey: item.logoKey ?? "",
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
+      }
+    : null;
+
+const safeEnsembleWithCode = (item) =>
+  item
+    ? {
+        ...safeEnsemble(item),
+        accessCode: item.accessCode ?? "",
       }
     : null;
 
@@ -159,6 +171,25 @@ const safeComment = (item) =>
       }
     : null;
 
+const safeInvitation = (item) =>
+  item
+    ? {
+        inviteCode: item.inviteCode,
+        ensembleId: item.ensembleId,
+        createdBy: item.createdBy,
+        inviteeEmail: item.inviteeEmail ?? "",
+        inviteeUserId: item.inviteeUserId ?? "",
+        role: item.role ?? "member",
+        sectionId: item.sectionId ?? "",
+        sectionName: item.sectionName ?? "",
+        status: item.status ?? "pending",
+        acceptedBy: item.acceptedBy ?? "",
+        acceptedAt: item.acceptedAt ?? "",
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }
+    : null;
+
 const safeNotification = (item) =>
   item
     ? {
@@ -196,6 +227,25 @@ const getEnsembleRecord = async (ensembleId) => {
   );
 
   return result.Item || null;
+};
+
+const getEnsembleByAccessCode = async (accessCode) => {
+  if (!accessCode) {
+    return null;
+  }
+
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName: env.ensemblesTableName,
+      IndexName: "accessCode-index",
+      KeyConditionExpression: "accessCode = :accessCode",
+      ExpressionAttributeValues: {
+        ":accessCode": accessCode,
+      },
+    }),
+  );
+
+  return (result.Items || [])[0] || null;
 };
 
 const requireOwnedEnsemble = async (event, ensembleId) => {
@@ -274,6 +324,21 @@ const getSubmissionRecord = async (submissionId) => {
   return result.Item || null;
 };
 
+const getInvitationRecord = async (inviteCode) => {
+  if (!inviteCode) {
+    return null;
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.invitationsTableName,
+      Key: { inviteCode },
+    }),
+  );
+
+  return result.Item || null;
+};
+
 const createNotification = async ({ userId, type, entityType, entityId, message }) => {
   if (!userId) {
     return null;
@@ -301,6 +366,9 @@ const createNotification = async ({ userId, type, entityType, entityId, message 
 
   return item;
 };
+
+const hasManagementAccess = (access) =>
+  Boolean(access?.ok && (access.isOwner || privilegedRoles.has(access.membership?.role ?? "")));
 
 const getEnsembleAccess = async (event, ensembleId) => {
   const ensemble = await getEnsembleRecord(ensembleId);
@@ -336,6 +404,19 @@ const getEnsembleAccess = async (event, ensembleId) => {
   };
 };
 
+const requireManagementAccess = async (event, ensembleId) => {
+  const access = await getEnsembleAccess(event, ensembleId);
+  if (!access.ok) return access.response;
+  if (!hasManagementAccess(access)) {
+    return {
+      ok: false,
+      response: response(403, { message: "You can only manage ensembles you administer" }),
+    };
+  }
+
+  return access;
+};
+
 const canAccessSubmission = (access, submission) => {
   if (!access?.ok || !submission) {
     return false;
@@ -345,7 +426,7 @@ const canAccessSubmission = (access, submission) => {
     return true;
   }
 
-  if (access.membership?.role === "director" || access.membership?.role === "leader") {
+  if (privilegedRoles.has(access.membership?.role ?? "")) {
     return true;
   }
 
@@ -417,7 +498,8 @@ const listEnsembles = async (event) => {
   const auth = ensureUser(event, userId);
   if (!auth.ok) return auth.response;
 
-  const result = await ddb.send(
+  const [ownedResult, membershipsResult] = await Promise.all([
+    ddb.send(
     new QueryCommand({
       TableName: env.ensemblesTableName,
       IndexName: "ownerId-index",
@@ -425,11 +507,33 @@ const listEnsembles = async (event) => {
       ExpressionAttributeValues: {
         ":ownerId": userId,
       },
+    })),
+    ddb.send(
+      new QueryCommand({
+        TableName: env.membershipsTableName,
+        KeyConditionExpression: "userId = :userId",
+        ExpressionAttributeValues: {
+          ":userId": userId,
+        },
+      }),
+    ),
+  ]);
+
+  const ownedEnsembles = ownedResult.Items || [];
+  const memberEnsembleIds = new Set((membershipsResult.Items || []).map((item) => item.ensembleId).filter(Boolean));
+  const memberEnsembleIdsArray = [...memberEnsembleIds].filter(
+    (ensembleId) => !ownedEnsembles.some((ensemble) => ensemble.ensembleId === ensembleId),
+  );
+
+  const memberEnsembles = await Promise.all(
+    memberEnsembleIdsArray.map(async (ensembleId) => {
+      const item = await getEnsembleRecord(ensembleId);
+      return item;
     }),
   );
 
   return response(200, {
-    ensembles: (result.Items || []).map(safeEnsemble),
+    ensembles: [...ownedEnsembles, ...memberEnsembles.filter(Boolean)].map(safeEnsemble),
   });
 };
 
@@ -450,11 +554,16 @@ const getEnsemble = async (event) => {
     return response(404, { message: "Ensemble not found" });
   }
 
-  const auth = ensureUser(event, result.Item.ownerId);
-  if (!auth.ok) return auth.response;
+  const access = await getEnsembleAccess(event, result.Item.ensembleId);
+  if (!access.ok) return access.response;
+
+  const ensemble = safeEnsemble(result.Item);
+  if (hasManagementAccess(access)) {
+    ensemble.accessCode = result.Item.accessCode || "";
+  }
 
   return response(200, {
-    ensemble: safeEnsemble(result.Item),
+    ensemble,
   });
 };
 
@@ -468,12 +577,14 @@ const createEnsemble = async (event) => {
   if (!auth.ok) return auth.response;
 
   const ensembleId = body.ensembleId || crypto.randomUUID();
+  const accessCode = crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase();
   const item = {
     ensembleId,
     ownerId: auth.userId,
     name: body.name || "",
     description: body.description || "",
     logoKey: body.logoKey || "",
+    accessCode,
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -487,6 +598,7 @@ const createEnsemble = async (event) => {
 
   return response(201, {
     ensemble: safeEnsemble(item),
+    accessCode,
   });
 };
 
@@ -589,8 +701,8 @@ const getSection = async (event) => {
     return response(404, { message: "Section not found" });
   }
 
-  const auth = ensureUser(event, result.Item.ownerId);
-  if (!auth.ok) return auth.response;
+  const access = await getEnsembleAccess(event, result.Item.ensembleId);
+  if (!access.ok) return access.response;
 
   return response(200, {
     section: safeSection(result.Item),
@@ -603,7 +715,7 @@ const createSection = async (event) => {
     return response(400, { message: "Invalid JSON body" });
   }
 
-  const ensembleAccess = await requireOwnedEnsemble(event, body.ensembleId || "");
+  const ensembleAccess = await requireManagementAccess(event, body.ensembleId || "");
   if (!ensembleAccess.ok) return ensembleAccess.response;
 
   const sectionId = body.sectionId || crypto.randomUUID();
@@ -651,8 +763,11 @@ const updateSection = async (event) => {
     return response(404, { message: "Section not found" });
   }
 
-  const auth = ensureUser(event, existing.Item.ownerId);
-  if (!auth.ok) return auth.response;
+  const access = await getEnsembleAccess(event, existing.Item.ensembleId);
+  if (!access.ok) return access.response;
+  if (!hasManagementAccess(access)) {
+    return response(403, { message: "You can only manage sections in your ensembles" });
+  }
 
   const item = {
     ...existing.Item,
@@ -684,7 +799,7 @@ const listMemberships = async (event) => {
     const access = await getEnsembleAccess(event, ensembleId);
     if (!access.ok) return access.response;
 
-    if (access.isOwner) {
+    if (hasManagementAccess(access)) {
       const result = await ddb.send(
         new QueryCommand({
           TableName: env.membershipsTableName,
@@ -757,13 +872,12 @@ const getMembership = async (event) => {
   if (!auth.ok) return auth.response;
 
   if (auth.userId !== userId) {
-    const ensemble = await getEnsembleRecord(ensembleId);
-    if (!ensemble) {
-      return response(404, { message: "Ensemble not found" });
-    }
-
-    const access = ensureUser(event, ensemble.ownerId);
+    const access = await getEnsembleAccess(event, ensembleId);
     if (!access.ok) return access.response;
+
+    if (!hasManagementAccess(access)) {
+      return response(403, { message: "You can only access memberships you manage" });
+    }
   }
 
   return response(200, {
@@ -777,7 +891,7 @@ const createMembership = async (event) => {
     return response(400, { message: "Invalid JSON body" });
   }
 
-  const ensembleAccess = await requireOwnedEnsemble(event, body.ensembleId || "");
+  const ensembleAccess = await requireManagementAccess(event, body.ensembleId || "");
   if (!ensembleAccess.ok) return ensembleAccess.response;
 
   const sectionId = body.sectionId || "";
@@ -847,7 +961,7 @@ const updateMembership = async (event) => {
     return response(404, { message: "Membership not found" });
   }
 
-  const ensembleAccess = await requireOwnedEnsemble(event, ensembleId);
+  const ensembleAccess = await requireManagementAccess(event, ensembleId);
   if (!ensembleAccess.ok) return ensembleAccess.response;
 
   let sectionName = body.sectionName ?? existing.Item.sectionName ?? "";
@@ -890,6 +1004,221 @@ const updateMembership = async (event) => {
   return response(200, {
     membership: safeMembership(item),
   });
+};
+
+const listInvitations = async (event) => {
+  const ensembleId = event.queryStringParameters?.ensembleId || "";
+  if (!ensembleId) {
+    return response(400, { message: "Missing ensembleId" });
+  }
+
+  const access = await getEnsembleAccess(event, ensembleId);
+  if (!access.ok) return access.response;
+  if (!hasManagementAccess(access)) {
+    return response(403, { message: "You can only view join requests for ensembles you manage" });
+  }
+
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName: env.invitationsTableName,
+      IndexName: "ensembleId-index",
+      KeyConditionExpression: "ensembleId = :ensembleId",
+      ExpressionAttributeValues: {
+        ":ensembleId": ensembleId,
+      },
+    }),
+  );
+
+  return response(200, {
+    invitations: (result.Items || []).map(safeInvitation),
+  });
+};
+
+const createInvitation = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  const ensemble = await getEnsembleByAccessCode(body.ensembleCode || body.accessCode || "");
+  if (!ensemble) {
+    return response(404, { message: "Ensemble code not found" });
+  }
+
+  const access = await getEnsembleAccess(event, ensemble.ensembleId);
+  const requestorProfile = await ddb.send(
+    new GetCommand({
+      TableName: env.usersTableName,
+      Key: { userId: auth.userId },
+    }),
+  );
+  const requestorEmail = requestorProfile.Item?.email || getClaims(event).email || "";
+
+  let inviteeUserId = auth.userId;
+  let inviteeEmail = requestorEmail;
+
+  if (body.inviteeUserId || body.inviteeEmail) {
+    if (!hasManagementAccess(access)) {
+      return response(403, { message: "You can only invite other users if you manage the ensemble" });
+    }
+
+    inviteeUserId = body.inviteeUserId || "";
+    inviteeEmail = body.inviteeEmail || "";
+  }
+
+  const inviteCode = crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase();
+  const item = {
+    inviteCode,
+    ensembleId: ensemble.ensembleId,
+    createdBy: auth.userId,
+    inviteeEmail,
+    inviteeUserId,
+    role: body.role || "member",
+    sectionId: body.sectionId || "",
+    sectionName: body.sectionName || "",
+    status: "pending",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.invitationsTableName,
+      Item: item,
+    }),
+  );
+
+  if (ensemble.ownerId !== auth.userId) {
+    await createNotification({
+      userId: ensemble.ownerId,
+      type: "join_request",
+      entityType: "ensemble",
+      entityId: ensemble.ensembleId,
+      message: "A member requested access to the ensemble.",
+    });
+  }
+
+  return response(201, {
+    invitation: safeInvitation(item),
+  });
+};
+
+const acceptInvitation = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  const inviteCode = body.inviteCode || "";
+  if (!inviteCode) {
+    return response(400, { message: "Missing inviteCode" });
+  }
+
+  const invitation = await getInvitationRecord(inviteCode);
+  if (!invitation) {
+    return response(404, { message: "Join request not found" });
+  }
+
+  if (invitation.status && invitation.status !== "pending") {
+    return response(409, { message: "Join request already handled" });
+  }
+  const ensemble = await getEnsembleRecord(invitation.ensembleId);
+  if (!ensemble) {
+    return response(404, { message: "Ensemble not found" });
+  }
+
+  const access = await getEnsembleAccess(event, invitation.ensembleId);
+  if (!access.ok) return access.response;
+  if (!hasManagementAccess(access)) {
+    return response(403, { message: "You can only approve join requests for ensembles you manage" });
+  }
+
+  const targetUserId = invitation.inviteeUserId || invitation.createdBy;
+  const targetProfile = await ddb.send(
+    new GetCommand({
+      TableName: env.usersTableName,
+      Key: { userId: targetUserId },
+    }),
+  );
+  const targetEmail = targetProfile.Item?.email || invitation.inviteeEmail || "";
+  if (invitation.inviteeEmail && targetEmail && invitation.inviteeEmail !== targetEmail) {
+    return response(403, { message: "The join request email does not match the selected account" });
+  }
+
+  const existingMembership = await getMembershipRecord(targetUserId, invitation.ensembleId);
+  const membershipItem = {
+    userId: targetUserId,
+    ensembleId: invitation.ensembleId,
+    role: invitation.role || "member",
+    sectionId: invitation.sectionId || existingMembership?.sectionId || "",
+    sectionName: invitation.sectionName || existingMembership?.sectionName || "",
+    joinedAt: existingMembership?.joinedAt || nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  await Promise.all([
+    ddb.send(
+      new PutCommand({
+        TableName: env.membershipsTableName,
+        Item: membershipItem,
+      }),
+    ),
+    ddb.send(
+      new PutCommand({
+        TableName: env.invitationsTableName,
+        Item: {
+          ...invitation,
+          status: "accepted",
+          acceptedBy: auth.userId,
+          acceptedAt: nowIso(),
+          updatedAt: nowIso(),
+        },
+      }),
+    ),
+  ]);
+
+  if (ensemble.ownerId !== targetUserId) {
+    await createNotification({
+      userId: targetUserId,
+      type: "join_request",
+      entityType: "ensemble",
+      entityId: ensemble.ensembleId,
+      message: "Your ensemble request was approved.",
+    });
+  }
+
+  return response(200, {
+    membership: safeMembership(membershipItem),
+  });
+};
+
+const deleteMembership = async (event) => {
+  const userId = event.pathParameters?.userId;
+  const ensembleId = event.pathParameters?.ensembleId;
+  if (!userId || !ensembleId) {
+    return response(400, { message: "Missing membership key" });
+  }
+
+  const access = await getEnsembleAccess(event, ensembleId);
+  if (!access.ok) return access.response;
+  if (!hasManagementAccess(access)) {
+    return response(403, { message: "You can only remove members from ensembles you manage" });
+  }
+
+  await ddb.send(
+    new DeleteCommand({
+      TableName: env.membershipsTableName,
+      Key: { userId, ensembleId },
+    }),
+  );
+
+  return response(200, { ok: true });
 };
 
 const presignUpload = async (event) => {
@@ -1003,8 +1332,8 @@ const getAssignment = async (event) => {
     return response(404, { message: "Assignment not found" });
   }
 
-  const auth = ensureUser(event, result.Item.ownerId);
-  if (!auth.ok) return auth.response;
+  const access = await getEnsembleAccess(event, result.Item.ensembleId);
+  if (!access.ok) return access.response;
 
   return response(200, {
     assignment: safeAssignment(result.Item),
@@ -1020,11 +1349,14 @@ const createAssignment = async (event) => {
   const auth = ensureUser(event);
   if (!auth.ok) return auth.response;
 
+  const ensembleAccess = await requireManagementAccess(event, body.ensembleId || "");
+  if (!ensembleAccess.ok) return ensembleAccess.response;
+
   const assignmentId = body.assignmentId || crypto.randomUUID();
   const item = {
     assignmentId,
     ownerId: auth.userId,
-    ensembleId: body.ensembleId || "",
+    ensembleId: ensembleAccess.ensemble.ensembleId,
     title: body.title || "",
     description: body.description || "",
     dueDate: body.dueDate || "",
@@ -1066,8 +1398,11 @@ const updateAssignment = async (event) => {
     return response(404, { message: "Assignment not found" });
   }
 
-  const auth = ensureUser(event, existing.Item.ownerId);
-  if (!auth.ok) return auth.response;
+  const access = await getEnsembleAccess(event, existing.Item.ensembleId);
+  if (!access.ok) return access.response;
+  if (!hasManagementAccess(access)) {
+    return response(403, { message: "You can only manage assignments in your ensembles" });
+  }
 
   const item = {
     ...existing.Item,
@@ -1125,7 +1460,7 @@ const listSubmissions = async (event) => {
     access = await getEnsembleAccess(event, section.ensembleId);
     if (!access.ok) return access.response;
 
-    if (!access.isOwner && access.membership?.sectionId !== sectionId && access.membership?.role !== "director" && access.membership?.role !== "leader") {
+    if (!access.isOwner && access.membership?.sectionId !== sectionId && !privilegedRoles.has(access.membership?.role ?? "")) {
       return response(403, { message: "You can only access submissions from your section" });
     }
 
@@ -1352,7 +1687,7 @@ const updateSubmission = async (event) => {
   }
 
   const isOwner = existing.Item.ownerId === access.userId;
-  const isReviewer = access.isOwner || access.membership?.role === "director" || access.membership?.role === "leader";
+  const isReviewer = access.isOwner || privilegedRoles.has(access.membership?.role ?? "");
 
   if (!isOwner && !isReviewer) {
     return response(403, { message: "You can only update your own submissions" });
@@ -1574,6 +1909,7 @@ exports.handler = async (event) => {
   if (key === "POST /memberships") return createMembership(event);
   if (key === "GET /memberships/{userId}/{ensembleId}") return getMembership(event);
   if (key === "PUT /memberships/{userId}/{ensembleId}") return updateMembership(event);
+  if (key === "DELETE /memberships/{userId}/{ensembleId}") return deleteMembership(event);
   if (key === "GET /assignments") return listAssignments(event);
   if (key === "POST /assignments") return createAssignment(event);
   if (key === "GET /assignments/{assignmentId}") return getAssignment(event);
@@ -1584,6 +1920,9 @@ exports.handler = async (event) => {
   if (key === "PUT /submissions/{submissionId}") return updateSubmission(event);
   if (key === "GET /comments") return listComments(event);
   if (key === "POST /comments") return createComment(event);
+  if (key === "GET /invitations") return listInvitations(event);
+  if (key === "POST /invitations") return createInvitation(event);
+  if (key === "POST /invitations/accept") return acceptInvitation(event);
   if (key === "GET /notifications") return listNotifications(event);
   if (key === "PUT /notifications/{notificationId}") return updateNotification(event);
 

@@ -8,16 +8,20 @@ import {
   createSection,
   createSubmission,
   createUploadPresign,
+  approveJoinRequest,
   fetchHealthSignal,
   getCurrentProfile,
   listAssignmentsForEnsemble,
   listComments,
   listMemberships,
   listEnsembles,
+  listJoinRequests,
   listSections,
   listSubmissionsWithScope,
   listNotifications,
   markNotificationRead,
+  removeMembership,
+  requestJoin,
   updateSubmission,
   upsertProfile,
 } from "./lib/api";
@@ -55,8 +59,8 @@ const dashboardCards = [
     body: "Manage one or more groups, each with its own sections and members.",
   },
   {
-    title: "Uploads",
-    body: "Send profile photos, ensemble logos, and practice videos to S3.",
+    title: "Media",
+    body: "Send profile photos, ensemble logos, and practice clips through the app.",
   },
   {
     title: "Assignments",
@@ -65,11 +69,24 @@ const dashboardCards = [
 ];
 
 const rolloutSteps = [
-  "Log in with Cognito",
+  "Log in",
   "Create or edit a profile",
   "Add an ensemble",
   "Upload photos and logos",
   "Track assignments and submissions",
+];
+
+const navigationSections = [
+  { id: "overview", label: "Overview" },
+  { id: "auth", label: "Access" },
+  { id: "profile", label: "Profile" },
+  { id: "ensembles", label: "Ensembles" },
+  { id: "structure", label: "Sections" },
+  { id: "assignments", label: "Assignments" },
+  { id: "submissions", label: "Submissions" },
+  { id: "notifications", label: "Updates" },
+  { id: "feedback", label: "Feedback" },
+  { id: "media", label: "Media" },
 ];
 
 const placeholderProfile = demoProfile;
@@ -78,6 +95,19 @@ function App() {
   const [apiState, setApiState] = useState("Checking backend connection...");
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [accessToken, setAccessToken] = useState("");
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") {
+      return "light";
+    }
+
+    const storedTheme = window.localStorage.getItem("ensembleflow-theme");
+    if (storedTheme === "dark" || storedTheme === "light") {
+      return storedTheme;
+    }
+
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+  const [activeSection, setActiveSection] = useState("overview");
   const [tokenDraft, setTokenDraft] = useState("");
   const [profile, setProfile] = useState(placeholderProfile);
   const [remoteEnsembles, setRemoteEnsembles] = useState<Array<{
@@ -159,6 +189,23 @@ function App() {
   const [membershipUserId, setMembershipUserId] = useState("");
   const [membershipRole, setMembershipRole] = useState("member");
   const [membershipSectionId, setMembershipSectionId] = useState("");
+  const [joinCodeDraft, setJoinCodeDraft] = useState("");
+  const [lastAccessCode, setLastAccessCode] = useState("");
+  const [remoteJoinRequests, setRemoteJoinRequests] = useState<Array<{
+    inviteCode: string;
+    ensembleId: string;
+    createdBy: string;
+    inviteeEmail: string;
+    inviteeUserId: string;
+    role: string;
+    sectionId: string;
+    sectionName: string;
+    status: string;
+    acceptedBy: string;
+    acceptedAt: string;
+    createdAt: string;
+    updatedAt: string;
+  }>>([]);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadEnsembleId, setUploadEnsembleId] = useState("");
   const [commentSubmissionId, setCommentSubmissionId] = useState("");
@@ -173,9 +220,14 @@ function App() {
   const [reviewSubmissionId, setReviewSubmissionId] = useState("");
   const [reviewStatus, setReviewStatus] = useState("approved");
   const [reviewFeedback, setReviewFeedback] = useState("");
-  const [formMessage, setFormMessage] = useState("Use Cognito sign-in or paste a token to try the API forms.");
+  const [formMessage, setFormMessage] = useState("Use hosted sign-in or paste a token to try the forms.");
   const [authMessage, setAuthMessage] = useState("Not signed in.");
   const [formBusy, setFormBusy] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("ensembleflow-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,7 +270,7 @@ function App() {
           setAccessToken(session.accessToken);
           setAuthMessage(getAuthStatusText(session));
           window.history.replaceState({}, document.title, window.location.pathname);
-          setFormMessage("Signed in with Cognito.");
+          setFormMessage("Signed in.");
         }
       } catch (error) {
         if (!cancelled) {
@@ -247,6 +299,8 @@ function App() {
         setRemoteSubmissions([]);
         setRemoteComments([]);
         setRemoteNotifications([]);
+        setRemoteJoinRequests([]);
+        setLastAccessCode("");
         setStructureEnsembleId("");
         setCommentSubmissionId("");
         return;
@@ -401,12 +455,55 @@ function App() {
     };
   }, [accessToken, commentSubmissionId]);
 
-  const connectionLabel = useMemo(() => {
-    if (!apiUrl) {
-      return "API URL not configured";
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadJoinRequests() {
+      const selectedEnsemble = remoteEnsembles.find(
+        (ensemble) => ensemble.ensembleId === structureEnsembleId,
+      );
+      const selectedMembership = remoteMemberships.find(
+        (membership) => membership.ensembleId === structureEnsembleId,
+      );
+      const canManageCurrentEnsemble =
+        Boolean(selectedEnsemble && selectedEnsemble.ownerId === profile.userId) ||
+        Boolean(
+          selectedMembership &&
+            (selectedMembership.role === "director" ||
+              selectedMembership.role === "co_director" ||
+              selectedMembership.role === "leader"),
+        );
+
+      if (!accessToken || !structureEnsembleId || !canManageCurrentEnsemble) {
+        setRemoteJoinRequests([]);
+        return;
+      }
+
+      try {
+        const response = await listJoinRequests(accessToken, structureEnsembleId);
+        if (!cancelled) {
+          setRemoteJoinRequests(response.invitations);
+        }
+      } catch {
+        if (!cancelled) {
+          setRemoteJoinRequests([]);
+        }
+      }
     }
 
-    return apiUrl;
+    void loadJoinRequests();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, structureEnsembleId, profile.userId, remoteEnsembles, remoteMemberships]);
+
+  const connectionLabel = useMemo(() => {
+    if (!apiUrl) {
+      return "Preview mode";
+    }
+
+    return "Live backend connected";
   }, []);
 
   const displayedEnsembles = remoteEnsembles.length
@@ -449,8 +546,12 @@ function App() {
     visibleSubmissions[0] ||
     null;
   const isDirectorMode = Boolean(currentEnsemble && currentEnsemble.ownerId === profile.userId) ||
-    visibleMemberships.some((membership) => membership.role === "director" || membership.role === "leader");
+    visibleMemberships.some(
+      (membership) =>
+        membership.role === "director" || membership.role === "co_director" || membership.role === "leader",
+    );
   const unreadNotificationCount = visibleNotifications.filter((notification) => !notification.isRead).length;
+  const showWorkspace = Boolean(accessToken);
 
   async function handleApplyToken(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -484,6 +585,8 @@ function App() {
     setRemoteSubmissions([]);
     setRemoteComments([]);
     setRemoteNotifications([]);
+    setRemoteJoinRequests([]);
+    setLastAccessCode("");
     setProfile(placeholderProfile);
     setDisplayName(placeholderProfile.displayName);
     setEmail(placeholderProfile.email);
@@ -507,7 +610,7 @@ function App() {
     ensembleId?: string,
   ) {
     if (!accessToken) {
-      throw new Error("Sign in with Cognito or paste an access token first.");
+      throw new Error("Sign in or paste an access token first.");
     }
 
     const presign = await createUploadPresign(accessToken, {
@@ -526,7 +629,7 @@ function App() {
     });
 
     if (!uploadResponse.ok) {
-      throw new Error("Upload to S3 failed.");
+      throw new Error("Upload failed.");
     }
 
     return presign.fileKey;
@@ -592,6 +695,7 @@ function App() {
       });
 
       setRemoteEnsembles((current) => [result.ensemble, ...current]);
+      setLastAccessCode(result.accessCode || "");
       setFormMessage("Ensemble saved.");
       setEnsembleName("");
       setEnsembleDescription("");
@@ -662,6 +766,52 @@ function App() {
       setFormMessage(error instanceof Error ? error.message : "Membership save failed.");
     } finally {
       setFormBusy(false);
+    }
+  }
+
+  async function handleJoinRequestSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!joinCodeDraft.trim()) {
+      setFormMessage("Enter an ensemble code first.");
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Sending join request...");
+
+    try {
+      await requestJoin(accessToken, { ensembleCode: joinCodeDraft.trim() });
+      setJoinCodeDraft("");
+      setFormMessage("Join request sent. A director will approve it.");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Join request failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function handleApproveRequest(inviteCode: string) {
+    setFormMessage("Approving join request...");
+    try {
+      await approveJoinRequest(accessToken, inviteCode);
+      setRemoteJoinRequests((current) => current.filter((item) => item.inviteCode !== inviteCode));
+      setFormMessage("Join request approved.");
+      await reloadNotifications();
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Approval failed.");
+    }
+  }
+
+  async function handleRemoveMember(userId: string, ensembleId: string) {
+    setFormMessage("Removing member...");
+    try {
+      await removeMembership(accessToken, userId, ensembleId);
+      setRemoteMemberships((current) =>
+        current.filter((membership) => !(membership.userId === userId && membership.ensembleId === ensembleId)),
+      );
+      setFormMessage("Member removed.");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Member removal failed.");
     }
   }
 
@@ -816,9 +966,103 @@ function App() {
     }
   }
 
+  if (!showWorkspace) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-hero panel panel-accent">
+          <p className="eyebrow">EnsembleFlow</p>
+          <h1>Sign in to manage your ensemble.</h1>
+          <p className="lede">
+            Use the hosted sign-in to create an account or log in with email. Once you are signed in,
+            you can request access to an ensemble with a code and start using the workspace.
+          </p>
+          <p className="muted-copy">
+            Google sign-in can be added later by connecting a Google identity provider in Cognito.
+          </p>
+        </section>
+
+        <section className="auth-grid">
+          <div className="panel form-panel">
+            <h3>Sign in or sign up</h3>
+            <p className="muted-copy">
+              {cognitoDomain && cognitoClientId && cognitoRedirectUri
+                ? "The hosted sign-in is ready."
+                : "Set the sign-in environment variables to enable hosted login."}
+            </p>
+            <div className="form-actions">
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={handleSignIn}
+                disabled={!cognitoDomain || !cognitoClientId || !cognitoRedirectUri}
+              >
+                Continue with email
+              </button>
+            </div>
+            <p className="muted-copy">The hosted sign-in page supports email sign-up.</p>
+          </div>
+
+          <div className="panel form-panel">
+            <h3>Status</h3>
+            <p>{authMessage}</p>
+            <p className="muted-copy">{apiState}</p>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
-    <main className="page-shell">
-      <section className="hero">
+    <main className="app-shell">
+      <aside className="sidebar panel">
+        <div>
+          <p className="eyebrow">EnsembleFlow</p>
+          <h2>Workspace</h2>
+          <p className="muted-copy">
+            Manage profiles, ensembles, sections, assignments, and feedback in one place.
+          </p>
+        </div>
+
+        <div className="sidebar-status">
+          <span className="status-chip">{apiState}</span>
+          <span className="status-chip status-chip-muted">{authMessage}</span>
+          <span className="status-chip">{isDirectorMode ? "Director" : "Member"}</span>
+        </div>
+
+        <div className="sidebar-actions">
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+          >
+            {theme === "dark" ? "Light mode" : "Dark mode"}
+          </button>
+        </div>
+
+        <nav className="sidebar-nav" aria-label="Workspace navigation">
+          {navigationSections.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`sidebar-link ${activeSection === item.id ? "sidebar-link-active" : ""}`}
+              onClick={() => {
+                setActiveSection(item.id);
+                document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-footer">
+          <p className="muted-copy">Current status</p>
+          <p className="sidebar-footer-value">{connectionLabel}</p>
+        </div>
+      </aside>
+
+      <div className="workspace">
+      <section className="hero" id="overview">
         <div className="hero-topline">
           <p className="eyebrow">EnsembleFlow</p>
           <div className="topline-statuses">
@@ -831,7 +1075,7 @@ function App() {
           <div>
             <h1>Keep ensembles organized and accountable.</h1>
             <p className="lede">
-              EnsembleFlow brings profiles, groups, sections, uploads, and
+              EnsembleFlow brings profiles, groups, sections, media, and
               practice tracking into one workspace for music teams.
             </p>
           </div>
@@ -847,13 +1091,13 @@ function App() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="overview-details">
         <div className="section-header">
           <div>
             <h2>Workspace overview</h2>
             <p>Simple dashboard areas for the first version of the app.</p>
           </div>
-          <p className="section-meta">Connected endpoint: {connectionLabel}</p>
+          <p className="section-meta">{connectionLabel}</p>
         </div>
 
         <div className="card-grid dashboard-grid">
@@ -878,24 +1122,23 @@ function App() {
         </article>
       </section>
 
-      <section className="section">
+      <section className="section" id="auth">
         <div className="section-header">
           <div>
-            <h2>Authentication</h2>
+            <h2>Access</h2>
             <p>
-              Use Cognito sign-in for the normal path. The access token input
-              stays available as a fallback for local testing.
+              Sign in, request access with an ensemble code, and keep the token field only as a fallback.
             </p>
           </div>
         </div>
 
         <div className="auth-grid">
           <div className="panel form-panel">
-            <h3>Cognito sign-in</h3>
+            <h3>Hosted sign-in</h3>
             <p className="muted-copy">
               {cognitoDomain && cognitoClientId && cognitoRedirectUri
-                ? "The hosted UI is configured for this environment."
-                : "Set the Cognito environment variables to enable hosted login."}
+                ? "The hosted sign-in is configured for this environment."
+                : "Set the sign-in environment variables to enable hosted login."}
             </p>
             <div className="form-actions">
               <button
@@ -904,7 +1147,7 @@ function App() {
                 onClick={handleSignIn}
                 disabled={!cognitoDomain || !cognitoClientId || !cognitoRedirectUri}
               >
-                Sign in with Cognito
+                Sign in
               </button>
               <button
                 className="button button-secondary"
@@ -920,13 +1163,33 @@ function App() {
             </p>
           </div>
 
+          <form className="panel form-panel" onSubmit={handleJoinRequestSubmit}>
+            <h3>Request access</h3>
+            <label className="field">
+              <span>Ensemble code</span>
+              <input
+                value={joinCodeDraft}
+                onChange={(event) => setJoinCodeDraft(event.target.value.toUpperCase())}
+                placeholder="ENTER CODE"
+              />
+            </label>
+            <div className="form-actions">
+              <button className="button button-primary" type="submit" disabled={formBusy}>
+                Send request
+              </button>
+            </div>
+            <p className="muted-copy">
+              A director or co-director approves the request before you are added.
+            </p>
+          </form>
+
           <form className="panel form-panel" onSubmit={handleApplyToken}>
             <label className="field">
               <span>Manual access token</span>
               <textarea
                 value={tokenDraft}
                 onChange={(event) => setTokenDraft(event.target.value)}
-                placeholder="Paste Cognito access token here"
+                placeholder="Paste access token here"
                 rows={4}
               />
             </label>
@@ -952,7 +1215,7 @@ function App() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="profile">
         <div className="section-header">
           <div>
             <h2>Profile</h2>
@@ -999,7 +1262,7 @@ function App() {
         </form>
       </section>
 
-      <section className="section">
+      <section className="section" id="ensembles">
         <div className="section-header">
           <div>
             <h2>Ensembles</h2>
@@ -1042,6 +1305,14 @@ function App() {
           </div>
         </form>
 
+        {lastAccessCode ? (
+          <article className="panel panel-accent">
+            <h3>Ensemble code</h3>
+            <p className="muted-copy">Share this code with members who need to request access.</p>
+            <p className="access-code">{lastAccessCode}</p>
+          </article>
+        ) : null}
+
         <div className="ensemble-list">
           {displayedEnsembles.map((ensemble) => (
             <article className="ensemble-row panel" key={ensemble.ensembleId}>
@@ -1065,7 +1336,7 @@ function App() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="structure">
         <div className="section-header">
           <div>
             <h2>Sections and members</h2>
@@ -1143,6 +1414,7 @@ function App() {
                 >
                   <option value="member">Member</option>
                   <option value="leader">Leader</option>
+                  <option value="co_director">Co-director</option>
                   <option value="director">Director</option>
                 </select>
               </label>
@@ -1195,9 +1467,22 @@ function App() {
                   <h3>{membership.sectionName || "Unassigned"}</h3>
                   <p className="ensemble-status">Role: {membership.role}</p>
                 </div>
-                <p className="ensemble-role">
-                  Joined {membership.joinedAt ? new Date(membership.joinedAt).toLocaleDateString() : "unknown"}
-                </p>
+                <div>
+                  <p className="ensemble-role">
+                    Joined {membership.joinedAt ? new Date(membership.joinedAt).toLocaleDateString() : "unknown"}
+                  </p>
+                  {isDirectorMode ? (
+                    <div className="form-actions">
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        onClick={() => handleRemoveMember(membership.userId, membership.ensembleId)}
+                      >
+                        Remove from ensemble
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </article>
             ))
           ) : (
@@ -1207,9 +1492,50 @@ function App() {
             </article>
           )}
         </div>
+
+        {isDirectorMode ? (
+          <div className="section">
+            <div className="section-header">
+              <div>
+                <h3>Join requests</h3>
+                <p>Approve or hold requests from people who entered the ensemble code.</p>
+              </div>
+            </div>
+
+            <div className="ensemble-list">
+              {remoteJoinRequests.length ? (
+                remoteJoinRequests.map((request) => (
+                  <article className="ensemble-row panel" key={request.inviteCode}>
+                    <div>
+                      <p className="ensemble-role">{request.inviteeEmail || request.inviteeUserId}</p>
+                      <h3>{request.role}</h3>
+                      <p className="ensemble-status">
+                        {request.sectionName || "No section yet"} | {request.status}
+                      </p>
+                    </div>
+                    <div className="form-actions">
+                      <button
+                        className="button button-primary"
+                        type="button"
+                        onClick={() => handleApproveRequest(request.inviteCode)}
+                      >
+                        Approve
+                      </button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <article className="panel">
+                  <h3>No pending requests</h3>
+                  <p>New requests will appear here after someone uses the ensemble code.</p>
+                </article>
+              )}
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      <section className="section">
+      <section className="section" id="assignments">
         <div className="section-header">
           <div>
             <h2>Assignments</h2>
@@ -1280,7 +1606,7 @@ function App() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="submissions">
         <div className="section-header">
           <div>
             <h2>Submissions</h2>
@@ -1358,7 +1684,7 @@ function App() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="thread">
         <div className="section-header">
           <div>
             <h2>Submission thread</h2>
@@ -1438,7 +1764,7 @@ function App() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="notifications">
         <div className="section-header">
           <div>
             <h2>Notifications</h2>
@@ -1486,7 +1812,7 @@ function App() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="feedback">
         <div className="section-header">
           <div>
             <h2>Feedback</h2>
@@ -1539,11 +1865,11 @@ function App() {
         </form>
       </section>
 
-      <section className="section">
+      <section className="section" id="media">
         <div className="section-header">
           <div>
-            <h2>Uploads</h2>
-            <p>Practice videos and other files go to S3 through presigned URLs.</p>
+            <h2>Media</h2>
+            <p>Practice videos and other files go through the app.</p>
           </div>
         </div>
 
@@ -1580,6 +1906,7 @@ function App() {
         </div>
       </section>
 
+      </div>
     </main>
   );
 }
