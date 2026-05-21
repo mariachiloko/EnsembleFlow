@@ -4,7 +4,7 @@ EnsembleFlow is a web app for music ensembles that helps groups stay organized, 
 
 ## What The App Is Meant To Do
 
-- Let users create accounts and log in.
+- Let users create accounts and log in with email and password.
 - Let users create a profile with a photo.
 - Let users create one or more ensembles.
 - Let users add sections under each ensemble.

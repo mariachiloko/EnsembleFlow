@@ -23,6 +23,7 @@ At that point, use an AWS profile or another configured credential source for th
 - DynamoDB tables
 - private S3 bucket for uploads
 - API permissions and routes
+- email-based sign-in and email recovery in Cognito
 
 ## After Deployment
 

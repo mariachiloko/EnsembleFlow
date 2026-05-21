@@ -977,7 +977,7 @@ function App() {
             you can request access to an ensemble with a code and start using the workspace.
           </p>
           <p className="muted-copy">
-            Director and co-director access is assigned separately after sign-up.
+            Sign in with email and password. Use the forgot-password link if you need a reset.
           </p>
         </section>
 
@@ -986,7 +986,7 @@ function App() {
             <h3>Sign in or sign up</h3>
             <p className="muted-copy">
               {cognitoDomain && cognitoClientId && cognitoRedirectUri
-                ? "The hosted sign-in is ready."
+                ? "The hosted sign-in is ready and uses email."
                 : "Set the sign-in environment variables to enable hosted login."}
             </p>
             <div className="form-actions">
@@ -1000,6 +1000,7 @@ function App() {
               </button>
             </div>
             <p className="muted-copy">The hosted sign-in page supports email sign-up.</p>
+            <p className="muted-copy">Password resets go through Cognito email recovery.</p>
           </div>
 
           <div className="panel form-panel">

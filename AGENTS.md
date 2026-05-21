@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 11: authenticated workspace and ensemble approval flow.
+Phase 12: email-based Cognito login and recovery.
 
 ## Project Standards
 
@@ -16,6 +16,8 @@ Phase 11: authenticated workspace and ensemble approval flow.
 - Frontend: React + Vite + TypeScript.
 - Backend: AWS serverless.
 - Authentication: Cognito.
+  - user pool uses email as the sign-in identifier
+  - password recovery goes through verified email
 - API layer: API Gateway + Lambda.
 - Data: DynamoDB for structured records.
 - File storage: S3 for uploads such as profile photos, logos, and videos.
@@ -62,6 +64,7 @@ Phase 11: authenticated workspace and ensemble approval flow.
 - Added a sign-in-first app gate so the workspace is hidden until a user is authenticated.
 - Added ensemble code requests, director approval, co-director access, and member removal flows.
 - Restricted privileged roles so director, co-director, and leader assignments are made only by existing management.
+- Switched Cognito to email-based sign-in and email-based password recovery.
 
 ## What Still Needs To Happen
 
@@ -69,3 +72,5 @@ Phase 11: authenticated workspace and ensemble approval flow.
 - Decide whether to keep or replace the local-only live env file before wider sharing.
 - Decide whether to add a Google identity provider later, if a second login option is still desired.
 - Decide whether to add a separate private promotion flow for trusted members who should become directors later.
+- Decide whether to add Google sign-in later as a second identity provider.
+- Verify the first email-based sign-up and password reset flow in the browser after the frontend reloads.

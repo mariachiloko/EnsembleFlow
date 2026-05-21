@@ -5,7 +5,19 @@ locals {
 resource "aws_cognito_user_pool" "this" {
   name = "${local.name_prefix}-users"
 
+  username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
+
+  username_configuration {
+    case_sensitive = false
+  }
+
+  account_recovery_setting {
+    recovery_mechanism {
+      name     = "verified_email"
+      priority = 1
+    }
+  }
 
   password_policy {
     minimum_length                   = 10
