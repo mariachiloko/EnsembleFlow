@@ -47,12 +47,14 @@ resource "aws_iam_role_policy" "lambda" {
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.users_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.ensembles_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.memberships_table_name}",
+          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.sections_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.uploads_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.assignments_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.submissions_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.users_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.ensembles_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.memberships_table_name}/index/*",
+          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.sections_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.uploads_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.assignments_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.submissions_table_name}/index/*",
@@ -98,6 +100,7 @@ resource "aws_lambda_function" "this" {
       USERS_TABLE_NAME       = var.users_table_name
       ENSEMBLES_TABLE_NAME    = var.ensembles_table_name
       MEMBERSHIPS_TABLE_NAME  = var.memberships_table_name
+      SECTIONS_TABLE_NAME     = var.sections_table_name
       UPLOADS_TABLE_NAME      = var.uploads_table_name
       ASSIGNMENTS_TABLE_NAME  = var.assignments_table_name
       SUBMISSIONS_TABLE_NAME  = var.submissions_table_name
@@ -161,6 +164,14 @@ locals {
     "GET /ensembles/{ensembleId}" = {}
     "PUT /ensembles/{ensembleId}" = {}
     "POST /uploads/presign" = {}
+    "GET /sections" = {}
+    "POST /sections" = {}
+    "GET /sections/{sectionId}" = {}
+    "PUT /sections/{sectionId}" = {}
+    "GET /memberships" = {}
+    "POST /memberships" = {}
+    "GET /memberships/{userId}/{ensembleId}" = {}
+    "PUT /memberships/{userId}/{ensembleId}" = {}
     "GET /assignments" = {}
     "POST /assignments" = {}
     "GET /assignments/{assignmentId}" = {}

@@ -16,6 +16,7 @@ const env = {
   usersTableName: process.env.USERS_TABLE_NAME,
   ensemblesTableName: process.env.ENSEMBLES_TABLE_NAME,
   membershipsTableName: process.env.MEMBERSHIPS_TABLE_NAME,
+  sectionsTableName: process.env.SECTIONS_TABLE_NAME,
   uploadsTableName: process.env.UPLOADS_TABLE_NAME,
   assignmentsTableName: process.env.ASSIGNMENTS_TABLE_NAME,
   submissionsTableName: process.env.SUBMISSIONS_TABLE_NAME,
@@ -87,6 +88,32 @@ const safeEnsemble = (item) =>
       }
     : null;
 
+const safeSection = (item) =>
+  item
+    ? {
+        sectionId: item.sectionId,
+        ensembleId: item.ensembleId,
+        ownerId: item.ownerId,
+        name: item.name,
+        description: item.description ?? "",
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }
+    : null;
+
+const safeMembership = (item) =>
+  item
+    ? {
+        userId: item.userId,
+        ensembleId: item.ensembleId,
+        role: item.role ?? "member",
+        sectionId: item.sectionId ?? "",
+        sectionName: item.sectionName ?? "",
+        joinedAt: item.joinedAt,
+        updatedAt: item.updatedAt,
+      }
+    : null;
+
 const safeAssignment = (item) =>
   item
     ? {
@@ -124,6 +151,37 @@ const health = () =>
     ok: true,
     service: "ensembleflow-api",
   });
+
+const getEnsembleRecord = async (ensembleId) => {
+  if (!ensembleId) {
+    return null;
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.ensemblesTableName,
+      Key: { ensembleId },
+    }),
+  );
+
+  return result.Item || null;
+};
+
+const requireOwnedEnsemble = async (event, ensembleId) => {
+  const ensemble = await getEnsembleRecord(ensembleId);
+
+  if (!ensemble) {
+    return {
+      ok: false,
+      response: response(404, { message: "Ensemble not found" }),
+    };
+  }
+
+  const auth = ensureUser(event, ensemble.ownerId);
+  if (!auth.ok) return auth.response;
+
+  return { ok: true, userId: auth.userId, ensemble };
+};
 
 const getProfile = async (event) => {
   const userId = event.pathParameters?.userId || getUserId(event);
@@ -301,6 +359,346 @@ const updateEnsemble = async (event) => {
 
   return response(200, {
     ensemble: safeEnsemble(item),
+  });
+};
+
+const listSections = async (event) => {
+  const userId = getUserId(event);
+  const auth = ensureUser(event, userId);
+  if (!auth.ok) return auth.response;
+
+  const ensembleId = event.queryStringParameters?.ensembleId;
+  const query = ensembleId
+    ? new QueryCommand({
+        TableName: env.sectionsTableName,
+        IndexName: "ensembleId-index",
+        KeyConditionExpression: "ensembleId = :ensembleId",
+        ExpressionAttributeValues: {
+          ":ensembleId": ensembleId,
+        },
+      })
+    : new QueryCommand({
+        TableName: env.sectionsTableName,
+        IndexName: "ownerId-index",
+        KeyConditionExpression: "ownerId = :ownerId",
+        ExpressionAttributeValues: {
+          ":ownerId": userId,
+        },
+      });
+
+  if (ensembleId) {
+    const ensemble = await getEnsembleRecord(ensembleId);
+    if (!ensemble) {
+      return response(404, { message: "Ensemble not found" });
+    }
+
+    const access = ensureUser(event, ensemble.ownerId);
+    if (!access.ok) return access.response;
+  }
+
+  const result = await ddb.send(query);
+
+  return response(200, {
+    sections: (result.Items || []).map(safeSection),
+  });
+};
+
+const getSection = async (event) => {
+  const sectionId = event.pathParameters?.sectionId;
+  if (!sectionId) {
+    return response(400, { message: "Missing sectionId" });
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.sectionsTableName,
+      Key: { sectionId },
+    }),
+  );
+
+  if (!result.Item) {
+    return response(404, { message: "Section not found" });
+  }
+
+  const auth = ensureUser(event, result.Item.ownerId);
+  if (!auth.ok) return auth.response;
+
+  return response(200, {
+    section: safeSection(result.Item),
+  });
+};
+
+const createSection = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const ensembleAccess = await requireOwnedEnsemble(event, body.ensembleId || "");
+  if (!ensembleAccess.ok) return ensembleAccess.response;
+
+  const sectionId = body.sectionId || crypto.randomUUID();
+  const item = {
+    sectionId,
+    ensembleId: ensembleAccess.ensemble.ensembleId,
+    ownerId: ensembleAccess.userId,
+    name: body.name || "",
+    description: body.description || "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.sectionsTableName,
+      Item: item,
+    }),
+  );
+
+  return response(201, {
+    section: safeSection(item),
+  });
+};
+
+const updateSection = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const sectionId = event.pathParameters?.sectionId;
+  if (!sectionId) {
+    return response(400, { message: "Missing sectionId" });
+  }
+
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: env.sectionsTableName,
+      Key: { sectionId },
+    }),
+  );
+
+  if (!existing.Item) {
+    return response(404, { message: "Section not found" });
+  }
+
+  const auth = ensureUser(event, existing.Item.ownerId);
+  if (!auth.ok) return auth.response;
+
+  const item = {
+    ...existing.Item,
+    name: body.name ?? existing.Item.name ?? "",
+    description: body.description ?? existing.Item.description ?? "",
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.sectionsTableName,
+      Item: item,
+    }),
+  );
+
+  return response(200, {
+    section: safeSection(item),
+  });
+};
+
+const listMemberships = async (event) => {
+  const userId = getUserId(event);
+  const auth = ensureUser(event, userId);
+  if (!auth.ok) return auth.response;
+
+  const ensembleId = event.queryStringParameters?.ensembleId;
+
+  if (ensembleId) {
+    const ensemble = await getEnsembleRecord(ensembleId);
+    if (!ensemble) {
+      return response(404, { message: "Ensemble not found" });
+    }
+
+    const access = ensureUser(event, ensemble.ownerId);
+    if (!access.ok) return access.response;
+  }
+
+  const query = ensembleId
+    ? new QueryCommand({
+        TableName: env.membershipsTableName,
+        IndexName: "ensembleId-index",
+        KeyConditionExpression: "ensembleId = :ensembleId",
+        ExpressionAttributeValues: {
+          ":ensembleId": ensembleId,
+        },
+      })
+    : new QueryCommand({
+        TableName: env.membershipsTableName,
+        KeyConditionExpression: "userId = :userId",
+        ExpressionAttributeValues: {
+          ":userId": userId,
+        },
+      });
+
+  const result = await ddb.send(query);
+
+  return response(200, {
+    memberships: (result.Items || []).map(safeMembership),
+  });
+};
+
+const getMembership = async (event) => {
+  const userId = event.pathParameters?.userId;
+  const ensembleId = event.pathParameters?.ensembleId;
+  if (!userId || !ensembleId) {
+    return response(400, { message: "Missing membership key" });
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.membershipsTableName,
+      Key: { userId, ensembleId },
+    }),
+  );
+
+  if (!result.Item) {
+    return response(404, { message: "Membership not found" });
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  if (auth.userId !== userId) {
+    const ensemble = await getEnsembleRecord(ensembleId);
+    if (!ensemble) {
+      return response(404, { message: "Ensemble not found" });
+    }
+
+    const access = ensureUser(event, ensemble.ownerId);
+    if (!access.ok) return access.response;
+  }
+
+  return response(200, {
+    membership: safeMembership(result.Item),
+  });
+};
+
+const createMembership = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const ensembleAccess = await requireOwnedEnsemble(event, body.ensembleId || "");
+  if (!ensembleAccess.ok) return ensembleAccess.response;
+
+  const sectionId = body.sectionId || "";
+  let sectionName = body.sectionName || "";
+
+  if (sectionId) {
+    const section = await ddb.send(
+      new GetCommand({
+        TableName: env.sectionsTableName,
+        Key: { sectionId },
+      }),
+    );
+
+    if (!section.Item) {
+      return response(404, { message: "Section not found" });
+    }
+
+    if (section.Item.ensembleId !== ensembleAccess.ensemble.ensembleId) {
+      return response(400, { message: "Section does not belong to the selected ensemble" });
+    }
+
+    sectionName = section.Item.name || sectionName;
+  }
+
+  const item = {
+    userId: body.userId || "",
+    ensembleId: ensembleAccess.ensemble.ensembleId,
+    role: body.role || "member",
+    sectionId,
+    sectionName,
+    joinedAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.membershipsTableName,
+      Item: item,
+    }),
+  );
+
+  return response(201, {
+    membership: safeMembership(item),
+  });
+};
+
+const updateMembership = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const userId = event.pathParameters?.userId;
+  const ensembleId = event.pathParameters?.ensembleId;
+  if (!userId || !ensembleId) {
+    return response(400, { message: "Missing membership key" });
+  }
+
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: env.membershipsTableName,
+      Key: { userId, ensembleId },
+    }),
+  );
+
+  if (!existing.Item) {
+    return response(404, { message: "Membership not found" });
+  }
+
+  const ensembleAccess = await requireOwnedEnsemble(event, ensembleId);
+  if (!ensembleAccess.ok) return ensembleAccess.response;
+
+  let sectionName = body.sectionName ?? existing.Item.sectionName ?? "";
+  let sectionId = body.sectionId ?? existing.Item.sectionId ?? "";
+
+  if (sectionId) {
+    const section = await ddb.send(
+      new GetCommand({
+        TableName: env.sectionsTableName,
+        Key: { sectionId },
+      }),
+    );
+
+    if (!section.Item) {
+      return response(404, { message: "Section not found" });
+    }
+
+    if (section.Item.ensembleId !== ensembleId) {
+      return response(400, { message: "Section does not belong to the selected ensemble" });
+    }
+
+    sectionName = section.Item.name || sectionName;
+  }
+
+  const item = {
+    ...existing.Item,
+    role: body.role ?? existing.Item.role ?? "member",
+    sectionId,
+    sectionName,
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.membershipsTableName,
+      Item: item,
+    }),
+  );
+
+  return response(200, {
+    membership: safeMembership(item),
   });
 };
 
@@ -678,6 +1076,14 @@ exports.handler = async (event) => {
   if (key === "GET /ensembles/{ensembleId}") return getEnsemble(event);
   if (key === "PUT /ensembles/{ensembleId}") return updateEnsemble(event);
   if (key === "POST /uploads/presign") return presignUpload(event);
+  if (key === "GET /sections") return listSections(event);
+  if (key === "POST /sections") return createSection(event);
+  if (key === "GET /sections/{sectionId}") return getSection(event);
+  if (key === "PUT /sections/{sectionId}") return updateSection(event);
+  if (key === "GET /memberships") return listMemberships(event);
+  if (key === "POST /memberships") return createMembership(event);
+  if (key === "GET /memberships/{userId}/{ensembleId}") return getMembership(event);
+  if (key === "PUT /memberships/{userId}/{ensembleId}") return updateMembership(event);
   if (key === "GET /assignments") return listAssignments(event);
   if (key === "POST /assignments") return createAssignment(event);
   if (key === "GET /assignments/{assignmentId}") return getAssignment(event);

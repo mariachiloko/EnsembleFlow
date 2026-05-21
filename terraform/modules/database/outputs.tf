@@ -13,6 +13,11 @@ output "memberships_table_name" {
   description = "DynamoDB table for ensemble memberships."
 }
 
+output "sections_table_name" {
+  value       = aws_dynamodb_table.sections.name
+  description = "DynamoDB table for ensemble sections."
+}
+
 output "uploads_table_name" {
   value       = aws_dynamodb_table.uploads.name
   description = "DynamoDB table for upload metadata."

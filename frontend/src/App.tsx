@@ -2,13 +2,17 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   apiUrl,
   createAssignment,
+  createMembership,
   createEnsemble,
+  createSection,
   createSubmission,
   createUploadPresign,
   fetchHealthSignal,
   getCurrentProfile,
   listAssignments,
+  listMemberships,
   listEnsembles,
+  listSections,
   listSubmissions,
   updateSubmission,
   upsertProfile,
@@ -74,6 +78,24 @@ function App() {
     description: string;
     logoKey: string;
   }>>([]);
+  const [remoteSections, setRemoteSections] = useState<Array<{
+    sectionId: string;
+    ensembleId: string;
+    ownerId: string;
+    name: string;
+    description: string;
+    createdAt: string;
+    updatedAt: string;
+  }>>([]);
+  const [remoteMemberships, setRemoteMemberships] = useState<Array<{
+    userId: string;
+    ensembleId: string;
+    role: string;
+    sectionId: string;
+    sectionName: string;
+    joinedAt: string;
+    updatedAt: string;
+  }>>([]);
   const [remoteAssignments, setRemoteAssignments] = useState<Array<{
     assignmentId: string;
     ownerId: string;
@@ -101,6 +123,12 @@ function App() {
   const [ensembleName, setEnsembleName] = useState("New ensemble");
   const [ensembleDescription, setEnsembleDescription] = useState("");
   const [ensembleLogoFile, setEnsembleLogoFile] = useState<File | null>(null);
+  const [structureEnsembleId, setStructureEnsembleId] = useState("");
+  const [sectionName, setSectionName] = useState("Brass");
+  const [sectionDescription, setSectionDescription] = useState("");
+  const [membershipUserId, setMembershipUserId] = useState("");
+  const [membershipRole, setMembershipRole] = useState("member");
+  const [membershipSectionId, setMembershipSectionId] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadEnsembleId, setUploadEnsembleId] = useState("");
   const [assignmentTitle, setAssignmentTitle] = useState("New assignment");
@@ -181,8 +209,11 @@ function App() {
       if (!accessToken) {
         setProfile(placeholderProfile);
         setRemoteEnsembles([]);
+        setRemoteSections([]);
+        setRemoteMemberships([]);
         setRemoteAssignments([]);
         setRemoteSubmissions([]);
+        setStructureEnsembleId("");
         return;
       }
 
@@ -220,6 +251,63 @@ function App() {
     };
   }, [accessToken]);
 
+  useEffect(() => {
+    if (!remoteEnsembles.length) {
+      return;
+    }
+
+    const firstEnsembleId = remoteEnsembles[0]?.ensembleId || "";
+
+    if (!structureEnsembleId && firstEnsembleId) {
+      setStructureEnsembleId(firstEnsembleId);
+    }
+
+    if (!assignmentEnsembleId && firstEnsembleId) {
+      setAssignmentEnsembleId(firstEnsembleId);
+    }
+
+    if (!uploadEnsembleId && firstEnsembleId) {
+      setUploadEnsembleId(firstEnsembleId);
+    }
+  }, [remoteEnsembles, structureEnsembleId, assignmentEnsembleId, uploadEnsembleId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadStructure() {
+      if (!accessToken || !structureEnsembleId) {
+        setRemoteSections([]);
+        setRemoteMemberships([]);
+        return;
+      }
+
+      try {
+        const [sectionsResponse, membershipsResponse] = await Promise.all([
+          listSections(accessToken, structureEnsembleId),
+          listMemberships(accessToken, structureEnsembleId),
+        ]);
+
+        if (cancelled) return;
+
+        setRemoteSections(sectionsResponse.sections);
+        setRemoteMemberships(membershipsResponse.memberships);
+        if (!membershipSectionId) {
+          setMembershipSectionId(sectionsResponse.sections[0]?.sectionId || "");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setFormMessage(error instanceof Error ? error.message : "Could not load structure data.");
+        }
+      }
+    }
+
+    void loadStructure();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, structureEnsembleId, membershipSectionId]);
+
   const connectionLabel = useMemo(() => {
     if (!apiUrl) {
       return "API URL not configured";
@@ -247,6 +335,13 @@ function App() {
         },
       ];
 
+  const activeSections = remoteSections.filter(
+    (section) => section.ensembleId === structureEnsembleId,
+  );
+  const activeMemberships = remoteMemberships.filter(
+    (membership) => membership.ensembleId === structureEnsembleId,
+  );
+
   async function handleApplyToken(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAuthSession(null);
@@ -273,9 +368,15 @@ function App() {
     setAccessToken("");
     setTokenDraft("");
     setRemoteEnsembles([]);
+    setRemoteSections([]);
+    setRemoteMemberships([]);
     setProfile(placeholderProfile);
     setDisplayName(placeholderProfile.displayName);
     setEmail(placeholderProfile.email);
+    setStructureEnsembleId("");
+    setAssignmentEnsembleId("");
+    setUploadEnsembleId("");
+    setMembershipSectionId("");
     setAuthMessage("Signed out.");
 
     const logoutUrl = buildCognitoLogoutUrl();
@@ -368,6 +469,68 @@ function App() {
       setEnsembleLogoFile(null);
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "Ensemble save failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function handleSectionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!structureEnsembleId) {
+      setFormMessage("Choose an ensemble before creating a section.");
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Saving section...");
+
+    try {
+      const result = await createSection(accessToken, {
+        ensembleId: structureEnsembleId,
+        name: sectionName,
+        description: sectionDescription,
+      });
+
+      setRemoteSections((current) => [result.section, ...current]);
+      if (!membershipSectionId) {
+        setMembershipSectionId(result.section.sectionId);
+      }
+      setFormMessage("Section saved.");
+      setSectionName("");
+      setSectionDescription("");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Section save failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function handleMembershipSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!structureEnsembleId) {
+      setFormMessage("Choose an ensemble before creating a membership.");
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Saving membership...");
+
+    try {
+      const section = remoteSections.find((item) => item.sectionId === membershipSectionId);
+      const result = await createMembership(accessToken, {
+        ensembleId: structureEnsembleId,
+        userId: membershipUserId,
+        role: membershipRole,
+        sectionId: membershipSectionId,
+        sectionName: section?.name || "",
+      });
+
+      setRemoteMemberships((current) => [result.membership, ...current]);
+      setFormMessage("Membership saved.");
+      setMembershipUserId("");
+      setMembershipRole("member");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Membership save failed.");
     } finally {
       setFormBusy(false);
     }
@@ -708,10 +871,163 @@ function App() {
                 <p className="ensemble-role">Owner: {ensemble.ownerId}</p>
                 <h3>{ensemble.name}</h3>
                 <p className="ensemble-status">{ensemble.description || "No description yet."}</p>
+                <p className="ensemble-role">
+                  Sections:{" "}
+                  {remoteSections.filter((section) => section.ensembleId === ensemble.ensembleId).length
+                    ? remoteSections
+                        .filter((section) => section.ensembleId === ensemble.ensembleId)
+                        .map((section) => section.name)
+                        .join(", ")
+                    : "None yet"}
+                </p>
               </div>
               <p className="ensemble-role">{ensemble.logoKey ? "Logo uploaded" : "No logo yet"}</p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <div>
+            <h2>Sections and members</h2>
+            <p>Group the ensemble by section and assign people to each group.</p>
+          </div>
+          <p className="section-meta">
+            Ensemble in focus:{" "}
+            {displayedEnsembles.find((ensemble) => ensemble.ensembleId === structureEnsembleId)?.name ||
+              "Choose an ensemble"}
+          </p>
+        </div>
+
+        <div className="auth-grid">
+          <form className="panel form-panel" onSubmit={handleSectionSubmit}>
+            <h3>Create section</h3>
+            <div className="form-grid">
+              <label className="field">
+                <span>Ensemble</span>
+                <select
+                  value={structureEnsembleId}
+                  onChange={(event) => {
+                    setStructureEnsembleId(event.target.value);
+                    setMembershipSectionId("");
+                  }}
+                >
+                  <option value="">Choose ensemble</option>
+                  {displayedEnsembles.map((ensemble) => (
+                    <option key={ensemble.ensembleId} value={ensemble.ensembleId}>
+                      {ensemble.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Section name</span>
+                <input
+                  value={sectionName}
+                  onChange={(event) => setSectionName(event.target.value)}
+                  placeholder="Brass"
+                />
+              </label>
+            </div>
+            <label className="field">
+              <span>Description</span>
+              <textarea
+                value={sectionDescription}
+                onChange={(event) => setSectionDescription(event.target.value)}
+                placeholder="Short section description"
+                rows={3}
+              />
+            </label>
+            <div className="form-actions">
+              <button className="button button-primary" type="submit" disabled={formBusy}>
+                Save section
+              </button>
+            </div>
+          </form>
+
+          <form className="panel form-panel" onSubmit={handleMembershipSubmit}>
+            <h3>Assign member</h3>
+            <div className="form-grid">
+              <label className="field">
+                <span>Member user ID</span>
+                <input
+                  value={membershipUserId}
+                  onChange={(event) => setMembershipUserId(event.target.value)}
+                  placeholder="member-user-id"
+                />
+              </label>
+              <label className="field">
+                <span>Role</span>
+                <select
+                  value={membershipRole}
+                  onChange={(event) => setMembershipRole(event.target.value)}
+                >
+                  <option value="member">Member</option>
+                  <option value="leader">Leader</option>
+                  <option value="director">Director</option>
+                </select>
+              </label>
+            </div>
+            <label className="field">
+              <span>Section</span>
+              <select
+                value={membershipSectionId}
+                onChange={(event) => setMembershipSectionId(event.target.value)}
+              >
+                <option value="">No section</option>
+                {activeSections.map((section) => (
+                  <option key={section.sectionId} value={section.sectionId}>
+                    {section.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="form-actions">
+              <button className="button button-primary" type="submit" disabled={formBusy}>
+                Save membership
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="card-grid dashboard-grid">
+          {activeSections.length ? (
+            activeSections.map((section) => (
+              <article className="panel" key={section.sectionId}>
+                <h3>{section.name}</h3>
+                <p>{section.description || "No description yet."}</p>
+                <p className="ensemble-role">Section ID: {section.sectionId}</p>
+              </article>
+            ))
+          ) : (
+            <article className="panel">
+              <h3>No sections yet</h3>
+              <p>Create the first section for the selected ensemble.</p>
+            </article>
+          )}
+        </div>
+
+        <div className="ensemble-list">
+          {activeMemberships.length ? (
+            activeMemberships.map((membership) => (
+              <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
+                <div>
+                  <p className="ensemble-role">User: {membership.userId}</p>
+                  <h3>{membership.sectionName || "Unassigned"}</h3>
+                  <p className="ensemble-status">Role: {membership.role}</p>
+                </div>
+                <p className="ensemble-role">
+                  Joined {membership.joinedAt ? new Date(membership.joinedAt).toLocaleDateString() : "unknown"}
+                </p>
+              </article>
+            ))
+          ) : (
+            <article className="panel">
+              <h3>No memberships yet</h3>
+              <p>Add people to the selected ensemble to see their assignments here.</p>
+            </article>
+          )}
         </div>
       </section>
 

@@ -91,6 +91,20 @@ export type AssignmentPayload = {
   dueDate: string;
 };
 
+export type SectionPayload = {
+  ensembleId: string;
+  name: string;
+  description?: string;
+};
+
+export type MembershipPayload = {
+  ensembleId: string;
+  userId: string;
+  role?: string;
+  sectionId?: string;
+  sectionName?: string;
+};
+
 export type SubmissionPayload = {
   assignmentId: string;
   videoKey?: string;
@@ -150,6 +164,72 @@ export async function createUploadPresign(token: string, payload: UploadPayload)
     fileKey: string;
     uploadUrl: string;
   }>("/uploads/presign", {
+    token,
+    body: payload,
+    method: "POST",
+  });
+}
+
+export async function listSections(token: string, ensembleId?: string) {
+  const query = ensembleId ? `?ensembleId=${encodeURIComponent(ensembleId)}` : "";
+  return request<{
+    sections: Array<{
+      sectionId: string;
+      ensembleId: string;
+      ownerId: string;
+      name: string;
+      description: string;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }>(`/sections${query}`, { token });
+}
+
+export async function createSection(token: string, payload: SectionPayload) {
+  return request<{
+    section: {
+      sectionId: string;
+      ensembleId: string;
+      ownerId: string;
+      name: string;
+      description: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>("/sections", {
+    token,
+    body: payload,
+    method: "POST",
+  });
+}
+
+export async function listMemberships(token: string, ensembleId?: string) {
+  const query = ensembleId ? `?ensembleId=${encodeURIComponent(ensembleId)}` : "";
+  return request<{
+    memberships: Array<{
+      userId: string;
+      ensembleId: string;
+      role: string;
+      sectionId: string;
+      sectionName: string;
+      joinedAt: string;
+      updatedAt: string;
+    }>;
+  }>(`/memberships${query}`, { token });
+}
+
+export async function createMembership(token: string, payload: MembershipPayload) {
+  return request<{
+    membership: {
+      userId: string;
+      ensembleId: string;
+      role: string;
+      sectionId: string;
+      sectionName: string;
+      joinedAt: string;
+      updatedAt: string;
+    };
+  }>("/memberships", {
     token,
     body: payload,
     method: "POST",

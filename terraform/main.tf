@@ -38,6 +38,7 @@ module "api" {
   users_table_name       = module.database.users_table_name
   ensembles_table_name   = module.database.ensembles_table_name
   memberships_table_name = module.database.memberships_table_name
+  sections_table_name    = module.database.sections_table_name
   uploads_table_name     = module.database.uploads_table_name
   assignments_table_name = module.database.assignments_table_name
   submissions_table_name = module.database.submissions_table_name

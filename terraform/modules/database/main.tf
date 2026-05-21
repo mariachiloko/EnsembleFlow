@@ -70,6 +70,43 @@ resource "aws_dynamodb_table" "memberships" {
   }
 }
 
+resource "aws_dynamodb_table" "sections" {
+  name         = "${local.name_prefix}-sections"
+  billing_mode  = "PAY_PER_REQUEST"
+  hash_key     = "sectionId"
+
+  attribute {
+    name = "sectionId"
+    type = "S"
+  }
+
+  attribute {
+    name = "ensembleId"
+    type = "S"
+  }
+
+  attribute {
+    name = "ownerId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "ensembleId-index"
+    hash_key        = "ensembleId"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "ownerId-index"
+    hash_key        = "ownerId"
+    projection_type = "ALL"
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+}
+
 resource "aws_dynamodb_table" "uploads" {
   name         = "${local.name_prefix}-uploads"
   billing_mode  = "PAY_PER_REQUEST"

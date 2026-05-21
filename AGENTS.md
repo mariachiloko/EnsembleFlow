@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 6: rehearsal workflow and feedback loop.
+Phase 7: sections and memberships.
 
 ## Project Standards
 
@@ -52,9 +52,10 @@ Phase 6: rehearsal workflow and feedback loop.
 - Added Cognito Hosted UI settings and a PKCE sign-in flow.
 - Added auth-aware frontend controls and session persistence.
 - Added assignment, submission, and feedback workflows.
+- Added section and membership management.
 
 ## What Still Needs To Happen
 
 - Tighten refresh-token and session-expiry handling if needed.
 - Decide whether to seed demo content for portfolio demos.
-- Expand to sections and membership management.
+- Add richer member lookup or invitation flow if needed.

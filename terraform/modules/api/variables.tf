@@ -43,6 +43,11 @@ variable "memberships_table_name" {
   description = "DynamoDB table for memberships."
 }
 
+variable "sections_table_name" {
+  type        = string
+  description = "DynamoDB table for sections."
+}
+
 variable "uploads_table_name" {
   type        = string
   description = "DynamoDB table for uploads."

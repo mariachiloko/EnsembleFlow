@@ -38,8 +38,22 @@ Typical fields:
 - `userId`
 - `ensembleId`
 - `role`
+- `sectionId`
 - `sectionName`
 - `joinedAt`
+
+### Section
+
+Stores a named subsection within an ensemble.
+
+Typical fields:
+
+- `sectionId`
+- `ensembleId`
+- `name`
+- `description`
+- `createdAt`
+- `updatedAt`
 
 ### Upload
 
@@ -72,5 +86,5 @@ Implemented next:
 Later phases may add:
 
 - progress tracking
-- section-specific task lists
 - attendance history
+- section-specific task lists
