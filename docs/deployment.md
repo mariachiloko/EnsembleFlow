@@ -30,6 +30,17 @@ At that point, use an AWS profile or another configured credential source for th
 - configure the Cognito hosted UI URLs in the browser app
 - test sign-in, profile updates, uploads, assignments, and section feeds
 
+## Current Live Stack
+
+The development stack is deployed in the configured AWS account and the live API health check is reachable.
+
+Current Terraform outputs:
+- API Gateway URL
+- Cognito user pool ID
+- Cognito app client ID
+- Cognito hosted UI domain
+- private uploads bucket name
+
 ## Notes
 
 - The stack is intentionally simple and single-account.

@@ -256,11 +256,6 @@ resource "aws_dynamodb_table" "comments" {
     type = "S"
   }
 
-  attribute {
-    name = "authorId"
-    type = "S"
-  }
-
   server_side_encryption {
     enabled = true
   }

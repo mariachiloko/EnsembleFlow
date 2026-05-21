@@ -111,7 +111,6 @@ resource "aws_lambda_function" "this" {
       COMMENTS_TABLE_NAME     = var.comments_table_name
       NOTIFICATIONS_TABLE_NAME = var.notifications_table_name
       UPLOADS_BUCKET_NAME     = var.uploads_bucket_name
-      AWS_REGION              = var.aws_region
     }
   }
 }

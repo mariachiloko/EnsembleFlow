@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 9: demo data and deployment readiness.
+Phase 10: live AWS deployment and verification.
 
 ## Project Standards
 
@@ -57,9 +57,11 @@ Phase 9: demo data and deployment readiness.
 - Added submission comments and in-app notifications.
 - Added demo content scaffolding for preview mode.
 - Added deployment notes that call out when AWS credentials are needed.
+- Deployed the live AWS dev stack with Terraform and verified the API health route.
+- Wired the frontend to the live Cognito and API outputs in a local-only env file.
 
 ## What Still Needs To Happen
 
 - Tighten refresh-token and session-expiry handling if needed.
 - Add richer member lookup or invitation flow if needed.
-- Run the first live Terraform deployment in the AWS account.
+- Decide whether to keep or replace the local-only live env file before wider sharing.
