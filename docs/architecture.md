@@ -34,13 +34,12 @@ Planned next pieces:
 - a simple dashboard
 - auth wiring
 
-## Portfolio Story
+## Product Goal
 
-The goal is to show a realistic SaaS workflow:
+The app is meant to support a realistic workflow for ensembles:
 
 - secure login
 - user-owned content
 - private uploads
 - serverless APIs
 - infrastructure in Terraform
-

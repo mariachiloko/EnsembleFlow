@@ -1,12 +1,6 @@
 # EnsembleFlow
 
-EnsembleFlow is a portfolio SaaS concept for music ensembles. It is designed to show practical cloud engineering, authentication, file uploads, and infrastructure as code without making the project feel like a tutorial exercise.
-
-## Current Status
-
-Phase 1 scaffold.
-
-The repository currently defines the intended structure and the initial application and infrastructure layout. The real AWS resources are not deployed yet.
+EnsembleFlow is a web app for music ensembles that helps groups stay organized, keep members accountable, and manage practice activity in one place.
 
 ## What The App Is Meant To Do
 
@@ -40,8 +34,3 @@ The repository currently defines the intended structure and the initial applicat
 - `docs/` - architecture notes and implementation reasoning.
 - `notes/` - private local-only scratch notes, ignored by git.
 - `AGENTS.md` - project memory and working rules.
-
-## Notes
-
-This project will be built in phases. Each phase should explain what changed, why it matters, and what is still incomplete.
-
