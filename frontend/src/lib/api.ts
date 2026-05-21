@@ -107,6 +107,7 @@ export type MembershipPayload = {
 
 export type SubmissionPayload = {
   assignmentId: string;
+  sectionId?: string;
   videoKey?: string;
   notes?: string;
 };
@@ -116,6 +117,11 @@ export type SubmissionReviewPayload = {
   feedback?: string;
   videoKey?: string;
   notes?: string;
+};
+
+export type CommentPayload = {
+  submissionId: string;
+  body: string;
 };
 
 export async function getCurrentProfile(token: string) {
@@ -237,6 +243,11 @@ export async function createMembership(token: string, payload: MembershipPayload
 }
 
 export async function listAssignments(token: string) {
+  return listAssignmentsForEnsemble(token);
+}
+
+export async function listAssignmentsForEnsemble(token: string, ensembleId?: string) {
+  const query = ensembleId ? `?ensembleId=${encodeURIComponent(ensembleId)}` : "";
   return request<{
     assignments: Array<{
       assignmentId: string;
@@ -248,7 +259,7 @@ export async function listAssignments(token: string) {
       createdAt: string;
       updatedAt: string;
     }>;
-  }>("/assignments", { token });
+  }>(`/assignments${query}`, { token });
 }
 
 export async function createAssignment(token: string, payload: AssignmentPayload) {
@@ -286,12 +297,25 @@ export async function updateAssignment(
 }
 
 export async function listSubmissions(token: string, assignmentId?: string) {
-  const query = assignmentId ? `?assignmentId=${encodeURIComponent(assignmentId)}` : "";
+  return listSubmissionsWithScope(token, assignmentId ? { assignmentId } : {});
+}
+
+export async function listSubmissionsWithScope(
+  token: string,
+  scope: { assignmentId?: string; sectionId?: string; ensembleId?: string } = {},
+) {
+  const params = new URLSearchParams();
+  if (scope.assignmentId) params.set("assignmentId", scope.assignmentId);
+  if (scope.sectionId) params.set("sectionId", scope.sectionId);
+  if (scope.ensembleId) params.set("ensembleId", scope.ensembleId);
+  const query = params.toString() ? `?${params.toString()}` : "";
   return request<{
     submissions: Array<{
       submissionId: string;
       assignmentId: string;
       ownerId: string;
+      ensembleId: string;
+      sectionId: string;
       videoKey: string;
       notes: string;
       reviewStatus: string;
@@ -308,6 +332,8 @@ export async function createSubmission(token: string, payload: SubmissionPayload
       submissionId: string;
       assignmentId: string;
       ownerId: string;
+      ensembleId: string;
+      sectionId: string;
       videoKey: string;
       notes: string;
       reviewStatus: string;
@@ -332,6 +358,8 @@ export async function updateSubmission(
       submissionId: string;
       assignmentId: string;
       ownerId: string;
+      ensembleId: string;
+      sectionId: string;
       videoKey: string;
       notes: string;
       reviewStatus: string;
@@ -342,6 +370,72 @@ export async function updateSubmission(
   }>(`/submissions/${submissionId}`, {
     token,
     body: payload,
+    method: "PUT",
+  });
+}
+
+export async function listComments(token: string, submissionId: string) {
+  return request<{
+    comments: Array<{
+      commentId: string;
+      submissionId: string;
+      authorId: string;
+      body: string;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }>(`/comments?submissionId=${encodeURIComponent(submissionId)}`, { token });
+}
+
+export async function createComment(token: string, payload: CommentPayload) {
+  return request<{
+    comment: {
+      commentId: string;
+      submissionId: string;
+      authorId: string;
+      body: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>("/comments", {
+    token,
+    body: payload,
+    method: "POST",
+  });
+}
+
+export async function listNotifications(token: string) {
+  return request<{
+    notifications: Array<{
+      userId: string;
+      notificationId: string;
+      type: string;
+      entityType: string;
+      entityId: string;
+      message: string;
+      isRead: boolean;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }>("/notifications", { token });
+}
+
+export async function markNotificationRead(token: string, notificationId: string) {
+  return request<{
+    notification: {
+      userId: string;
+      notificationId: string;
+      type: string;
+      entityType: string;
+      entityId: string;
+      message: string;
+      isRead: boolean;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>(`/notifications/${notificationId}`, {
+    token,
+    body: { isRead: true },
     method: "PUT",
   });
 }

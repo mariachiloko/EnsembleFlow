@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 7: sections and memberships.
+Phase 8: director/member access, section feeds, and notifications.
 
 ## Project Standards
 
@@ -53,6 +53,8 @@ Phase 7: sections and memberships.
 - Added auth-aware frontend controls and session persistence.
 - Added assignment, submission, and feedback workflows.
 - Added section and membership management.
+- Added role-aware director/member workspace behavior.
+- Added submission comments and in-app notifications.
 
 ## What Still Needs To Happen
 

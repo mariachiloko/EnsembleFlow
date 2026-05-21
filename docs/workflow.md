@@ -22,6 +22,8 @@ The first version focuses on:
 - assignments
 - submissions
 - feedback
+- section-scoped feeds
+- comments
+- notifications
 
 The app does not yet include advanced reporting, attendance tracking, or AI analysis.
-

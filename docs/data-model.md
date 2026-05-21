@@ -69,6 +69,53 @@ Typical fields:
 - `contentType`
 - `createdAt`
 
+### Submission
+
+Stores a practice video submission for an assignment.
+
+Typical fields:
+
+- `submissionId`
+- `assignmentId`
+- `ensembleId`
+- `sectionId`
+- `ownerId`
+- `videoKey`
+- `notes`
+- `reviewStatus`
+- `feedback`
+- `createdAt`
+- `updatedAt`
+
+### Comment
+
+Stores a comment on a submission thread.
+
+Typical fields:
+
+- `commentId`
+- `submissionId`
+- `authorId`
+- `body`
+- `createdAt`
+- `updatedAt`
+
+### Notification
+
+Stores a lightweight in-app notification for a user.
+
+Typical fields:
+
+- `userId`
+- `notificationId`
+- `type`
+- `entityType`
+- `entityId`
+- `message`
+- `isRead`
+- `createdAt`
+- `updatedAt`
+
 ## Storage Split
 
 - User profiles and ensemble settings live in DynamoDB.
@@ -82,6 +129,7 @@ Implemented next:
 - assignments
 - submissions
 - comments and feedback
+- notifications
 
 Later phases may add:
 

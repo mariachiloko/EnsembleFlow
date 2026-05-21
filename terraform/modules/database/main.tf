@@ -201,6 +201,16 @@ resource "aws_dynamodb_table" "submissions" {
     type = "S"
   }
 
+  attribute {
+    name = "sectionId"
+    type = "S"
+  }
+
+  attribute {
+    name = "ensembleId"
+    type = "S"
+  }
+
   global_secondary_index {
     name            = "assignmentId-index"
     hash_key        = "assignmentId"
@@ -211,6 +221,65 @@ resource "aws_dynamodb_table" "submissions" {
     name            = "ownerId-index"
     hash_key        = "ownerId"
     projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "sectionId-index"
+    hash_key        = "sectionId"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "ensembleId-index"
+    hash_key        = "ensembleId"
+    projection_type = "ALL"
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+}
+
+resource "aws_dynamodb_table" "comments" {
+  name         = "${local.name_prefix}-comments"
+  billing_mode  = "PAY_PER_REQUEST"
+  hash_key     = "submissionId"
+  range_key    = "commentId"
+
+  attribute {
+    name = "submissionId"
+    type = "S"
+  }
+
+  attribute {
+    name = "commentId"
+    type = "S"
+  }
+
+  attribute {
+    name = "authorId"
+    type = "S"
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+}
+
+resource "aws_dynamodb_table" "notifications" {
+  name         = "${local.name_prefix}-notifications"
+  billing_mode  = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+  range_key    = "notificationId"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "notificationId"
+    type = "S"
   }
 
   server_side_encryption {

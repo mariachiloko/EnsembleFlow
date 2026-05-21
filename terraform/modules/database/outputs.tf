@@ -32,3 +32,13 @@ output "submissions_table_name" {
   value       = aws_dynamodb_table.submissions.name
   description = "DynamoDB table for submissions."
 }
+
+output "comments_table_name" {
+  value       = aws_dynamodb_table.comments.name
+  description = "DynamoDB table for submission comments."
+}
+
+output "notifications_table_name" {
+  value       = aws_dynamodb_table.notifications.name
+  description = "DynamoDB table for user notifications."
+}

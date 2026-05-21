@@ -20,6 +20,8 @@ const env = {
   uploadsTableName: process.env.UPLOADS_TABLE_NAME,
   assignmentsTableName: process.env.ASSIGNMENTS_TABLE_NAME,
   submissionsTableName: process.env.SUBMISSIONS_TABLE_NAME,
+  commentsTableName: process.env.COMMENTS_TABLE_NAME,
+  notificationsTableName: process.env.NOTIFICATIONS_TABLE_NAME,
   uploadsBucketName: process.env.UPLOADS_BUCKET_NAME,
 };
 
@@ -134,10 +136,39 @@ const safeSubmission = (item) =>
         submissionId: item.submissionId,
         assignmentId: item.assignmentId,
         ownerId: item.ownerId,
+        ensembleId: item.ensembleId ?? "",
+        sectionId: item.sectionId ?? "",
         videoKey: item.videoKey ?? "",
         notes: item.notes ?? "",
         reviewStatus: item.reviewStatus ?? "pending",
         feedback: item.feedback ?? "",
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }
+    : null;
+
+const safeComment = (item) =>
+  item
+    ? {
+        commentId: item.commentId,
+        submissionId: item.submissionId,
+        authorId: item.authorId,
+        body: item.body ?? "",
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }
+    : null;
+
+const safeNotification = (item) =>
+  item
+    ? {
+        userId: item.userId,
+        notificationId: item.notificationId,
+        type: item.type ?? "info",
+        entityType: item.entityType ?? "",
+        entityId: item.entityId ?? "",
+        message: item.message ?? "",
+        isRead: Boolean(item.isRead),
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       }
@@ -181,6 +212,148 @@ const requireOwnedEnsemble = async (event, ensembleId) => {
   if (!auth.ok) return auth.response;
 
   return { ok: true, userId: auth.userId, ensemble };
+};
+
+const getMembershipRecord = async (userId, ensembleId) => {
+  if (!userId || !ensembleId) {
+    return null;
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.membershipsTableName,
+      Key: { userId, ensembleId },
+    }),
+  );
+
+  return result.Item || null;
+};
+
+const getSectionRecord = async (sectionId) => {
+  if (!sectionId) {
+    return null;
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.sectionsTableName,
+      Key: { sectionId },
+    }),
+  );
+
+  return result.Item || null;
+};
+
+const getAssignmentRecord = async (assignmentId) => {
+  if (!assignmentId) {
+    return null;
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.assignmentsTableName,
+      Key: { assignmentId },
+    }),
+  );
+
+  return result.Item || null;
+};
+
+const getSubmissionRecord = async (submissionId) => {
+  if (!submissionId) {
+    return null;
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.submissionsTableName,
+      Key: { submissionId },
+    }),
+  );
+
+  return result.Item || null;
+};
+
+const createNotification = async ({ userId, type, entityType, entityId, message }) => {
+  if (!userId) {
+    return null;
+  }
+
+  const notificationId = crypto.randomUUID();
+  const item = {
+    userId,
+    notificationId,
+    type,
+    entityType,
+    entityId,
+    message,
+    isRead: false,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.notificationsTableName,
+      Item: item,
+    }),
+  );
+
+  return item;
+};
+
+const getEnsembleAccess = async (event, ensembleId) => {
+  const ensemble = await getEnsembleRecord(ensembleId);
+
+  if (!ensemble) {
+    return {
+      ok: false,
+      response: response(404, { message: "Ensemble not found" }),
+    };
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  if (ensemble.ownerId === auth.userId) {
+    return { ok: true, userId: auth.userId, ensemble, membership: null, isOwner: true };
+  }
+
+  const membership = await getMembershipRecord(auth.userId, ensembleId);
+  if (!membership) {
+    return {
+      ok: false,
+      response: response(403, { message: "You can only access your ensembles" }),
+    };
+  }
+
+  return {
+    ok: true,
+    userId: auth.userId,
+    ensemble,
+    membership,
+    isOwner: false,
+  };
+};
+
+const canAccessSubmission = (access, submission) => {
+  if (!access?.ok || !submission) {
+    return false;
+  }
+
+  if (access.isOwner || submission.ownerId === access.userId) {
+    return true;
+  }
+
+  if (access.membership?.role === "director" || access.membership?.role === "leader") {
+    return true;
+  }
+
+  return Boolean(
+    access.membership?.sectionId &&
+      submission.sectionId &&
+      access.membership.sectionId === submission.sectionId,
+  );
 };
 
 const getProfile = async (event) => {
@@ -363,37 +536,33 @@ const updateEnsemble = async (event) => {
 };
 
 const listSections = async (event) => {
+  const ensembleId = event.queryStringParameters?.ensembleId;
   const userId = getUserId(event);
   const auth = ensureUser(event, userId);
   if (!auth.ok) return auth.response;
 
-  const ensembleId = event.queryStringParameters?.ensembleId;
-  const query = ensembleId
-    ? new QueryCommand({
-        TableName: env.sectionsTableName,
-        IndexName: "ensembleId-index",
-        KeyConditionExpression: "ensembleId = :ensembleId",
-        ExpressionAttributeValues: {
-          ":ensembleId": ensembleId,
-        },
-      })
-    : new QueryCommand({
-        TableName: env.sectionsTableName,
-        IndexName: "ownerId-index",
-        KeyConditionExpression: "ownerId = :ownerId",
-        ExpressionAttributeValues: {
-          ":ownerId": userId,
-        },
-      });
-
+  let query;
   if (ensembleId) {
-    const ensemble = await getEnsembleRecord(ensembleId);
-    if (!ensemble) {
-      return response(404, { message: "Ensemble not found" });
-    }
-
-    const access = ensureUser(event, ensemble.ownerId);
+    const access = await getEnsembleAccess(event, ensembleId);
     if (!access.ok) return access.response;
+
+    query = new QueryCommand({
+      TableName: env.sectionsTableName,
+      IndexName: "ensembleId-index",
+      KeyConditionExpression: "ensembleId = :ensembleId",
+      ExpressionAttributeValues: {
+        ":ensembleId": ensembleId,
+      },
+    });
+  } else {
+    query = new QueryCommand({
+      TableName: env.sectionsTableName,
+      IndexName: "ownerId-index",
+      KeyConditionExpression: "ownerId = :ownerId",
+      ExpressionAttributeValues: {
+        ":ownerId": userId,
+      },
+    });
   }
 
   const result = await ddb.send(query);
@@ -512,33 +681,54 @@ const listMemberships = async (event) => {
   const ensembleId = event.queryStringParameters?.ensembleId;
 
   if (ensembleId) {
-    const ensemble = await getEnsembleRecord(ensembleId);
-    if (!ensemble) {
-      return response(404, { message: "Ensemble not found" });
+    const access = await getEnsembleAccess(event, ensembleId);
+    if (!access.ok) return access.response;
+
+    if (access.isOwner) {
+      const result = await ddb.send(
+        new QueryCommand({
+          TableName: env.membershipsTableName,
+          IndexName: "ensembleId-index",
+          KeyConditionExpression: "ensembleId = :ensembleId",
+          ExpressionAttributeValues: {
+            ":ensembleId": ensembleId,
+          },
+        }),
+      );
+
+      return response(200, {
+        memberships: (result.Items || []).map(safeMembership),
+      });
     }
 
-    const access = ensureUser(event, ensemble.ownerId);
-    if (!access.ok) return access.response;
-  }
-
-  const query = ensembleId
-    ? new QueryCommand({
+    const currentMembership = access.membership;
+    const result = await ddb.send(
+      new QueryCommand({
         TableName: env.membershipsTableName,
         IndexName: "ensembleId-index",
         KeyConditionExpression: "ensembleId = :ensembleId",
         ExpressionAttributeValues: {
           ":ensembleId": ensembleId,
         },
-      })
-    : new QueryCommand({
-        TableName: env.membershipsTableName,
-        KeyConditionExpression: "userId = :userId",
-        ExpressionAttributeValues: {
-          ":userId": userId,
-        },
-      });
+      }),
+    );
 
-  const result = await ddb.send(query);
+    return response(200, {
+      memberships: (result.Items || [])
+        .filter((item) => !currentMembership?.sectionId || item.sectionId === currentMembership.sectionId)
+        .map(safeMembership),
+    });
+  }
+
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName: env.membershipsTableName,
+      KeyConditionExpression: "userId = :userId",
+      ExpressionAttributeValues: {
+        ":userId": userId,
+      },
+    }),
+  );
 
   return response(200, {
     memberships: (result.Items || []).map(safeMembership),
@@ -761,16 +951,35 @@ const listAssignments = async (event) => {
   const auth = ensureUser(event, userId);
   if (!auth.ok) return auth.response;
 
-  const result = await ddb.send(
-    new QueryCommand({
-      TableName: env.assignmentsTableName,
-      IndexName: "ownerId-index",
-      KeyConditionExpression: "ownerId = :ownerId",
-      ExpressionAttributeValues: {
-        ":ownerId": userId,
-      },
-    }),
-  );
+  const ensembleId = event.queryStringParameters?.ensembleId;
+  let result;
+
+  if (ensembleId) {
+    const access = await getEnsembleAccess(event, ensembleId);
+    if (!access.ok) return access.response;
+
+    result = await ddb.send(
+      new QueryCommand({
+        TableName: env.assignmentsTableName,
+        IndexName: "ensembleId-index",
+        KeyConditionExpression: "ensembleId = :ensembleId",
+        ExpressionAttributeValues: {
+          ":ensembleId": ensembleId,
+        },
+      }),
+    );
+  } else {
+    result = await ddb.send(
+      new QueryCommand({
+        TableName: env.assignmentsTableName,
+        IndexName: "ownerId-index",
+        KeyConditionExpression: "ownerId = :ownerId",
+        ExpressionAttributeValues: {
+          ":ownerId": userId,
+        },
+      }),
+    );
+  }
 
   return response(200, {
     assignments: (result.Items || []).map(safeAssignment),
@@ -886,29 +1095,88 @@ const listSubmissions = async (event) => {
   const auth = ensureUser(event, userId);
   if (!auth.ok) return auth.response;
 
+  const ensembleId = event.queryStringParameters?.ensembleId;
   const assignmentId = event.queryStringParameters?.assignmentId;
-  const query = assignmentId
-    ? new QueryCommand({
+  const sectionId = event.queryStringParameters?.sectionId;
+
+  let result;
+  let access = null;
+
+  if (ensembleId) {
+    access = await getEnsembleAccess(event, ensembleId);
+    if (!access.ok) return access.response;
+
+    result = await ddb.send(
+      new QueryCommand({
+        TableName: env.submissionsTableName,
+        IndexName: "ensembleId-index",
+        KeyConditionExpression: "ensembleId = :ensembleId",
+        ExpressionAttributeValues: {
+          ":ensembleId": ensembleId,
+        },
+      }),
+    );
+  } else if (sectionId) {
+    const section = await getSectionRecord(sectionId);
+    if (!section) {
+      return response(404, { message: "Section not found" });
+    }
+
+    access = await getEnsembleAccess(event, section.ensembleId);
+    if (!access.ok) return access.response;
+
+    if (!access.isOwner && access.membership?.sectionId !== sectionId && access.membership?.role !== "director" && access.membership?.role !== "leader") {
+      return response(403, { message: "You can only access submissions from your section" });
+    }
+
+    result = await ddb.send(
+      new QueryCommand({
+        TableName: env.submissionsTableName,
+        IndexName: "sectionId-index",
+        KeyConditionExpression: "sectionId = :sectionId",
+        ExpressionAttributeValues: {
+          ":sectionId": sectionId,
+        },
+      }),
+    );
+  } else if (assignmentId) {
+    const assignment = await getAssignmentRecord(assignmentId);
+    if (!assignment) {
+      return response(404, { message: "Assignment not found" });
+    }
+
+    access = await getEnsembleAccess(event, assignment.ensembleId);
+    if (!access.ok) return access.response;
+
+    result = await ddb.send(
+      new QueryCommand({
         TableName: env.submissionsTableName,
         IndexName: "assignmentId-index",
         KeyConditionExpression: "assignmentId = :assignmentId",
         ExpressionAttributeValues: {
           ":assignmentId": assignmentId,
         },
-      })
-    : new QueryCommand({
+      }),
+    );
+  } else {
+    result = await ddb.send(
+      new QueryCommand({
         TableName: env.submissionsTableName,
         IndexName: "ownerId-index",
         KeyConditionExpression: "ownerId = :ownerId",
         ExpressionAttributeValues: {
           ":ownerId": userId,
         },
-      });
+      }),
+    );
+  }
 
-  const result = await ddb.send(query);
+  const visibleItems = access
+    ? (result.Items || []).filter((item) => canAccessSubmission(access, item))
+    : result.Items || [];
 
   return response(200, {
-    submissions: (result.Items || []).map(safeSubmission),
+    submissions: visibleItems.map(safeSubmission),
   });
 };
 
@@ -929,23 +1197,10 @@ const getSubmission = async (event) => {
     return response(404, { message: "Submission not found" });
   }
 
-  const auth = ensureUser(event);
-  if (!auth.ok) return auth.response;
+  const access = await getEnsembleAccess(event, result.Item.ensembleId);
+  if (!access.ok) return access.response;
 
-  const assignment = await ddb.send(
-    new GetCommand({
-      TableName: env.assignmentsTableName,
-      Key: { assignmentId: result.Item.assignmentId },
-    }),
-  );
-
-  if (!assignment.Item) {
-    return response(404, { message: "Assignment not found" });
-  }
-
-  const isOwner = result.Item.ownerId === auth.userId;
-  const isReviewer = assignment.Item.ownerId === auth.userId;
-  if (!isOwner && !isReviewer) {
+  if (!canAccessSubmission(access, result.Item)) {
     return response(403, { message: "You can only access your own submissions" });
   }
 
@@ -963,22 +1218,46 @@ const createSubmission = async (event) => {
   const auth = ensureUser(event);
   if (!auth.ok) return auth.response;
 
-  const assignment = await ddb.send(
-    new GetCommand({
-      TableName: env.assignmentsTableName,
-      Key: { assignmentId: body.assignmentId || "" },
-    }),
-  );
+  const assignment = await getAssignmentRecord(body.assignmentId || "");
 
-  if (!assignment.Item) {
+  if (!assignment) {
     return response(404, { message: "Assignment not found" });
+  }
+
+  const access = await getEnsembleAccess(event, assignment.ensembleId);
+  if (!access.ok) return access.response;
+
+  let sectionId = body.sectionId || access.membership?.sectionId || "";
+  let sectionRecord = null;
+
+  if (sectionId) {
+    sectionRecord = await getSectionRecord(sectionId);
+    if (!sectionRecord) {
+      return response(404, { message: "Section not found" });
+    }
+
+    if (sectionRecord.ensembleId !== assignment.ensembleId) {
+      return response(400, { message: "Section does not belong to the selected ensemble" });
+    }
+
+    if (
+      !access.isOwner &&
+      access.membership?.sectionId &&
+      access.membership.sectionId !== sectionId &&
+      access.membership.role !== "director" &&
+      access.membership.role !== "leader"
+    ) {
+      return response(403, { message: "You can only submit for your section" });
+    }
   }
 
   const submissionId = body.submissionId || crypto.randomUUID();
   const item = {
     submissionId,
-    assignmentId: assignment.Item.assignmentId,
+    assignmentId: assignment.assignmentId,
+    ensembleId: assignment.ensembleId,
     ownerId: auth.userId,
+    sectionId,
     videoKey: body.videoKey || "",
     notes: body.notes || "",
     reviewStatus: "pending",
@@ -992,6 +1271,45 @@ const createSubmission = async (event) => {
       TableName: env.submissionsTableName,
       Item: item,
     }),
+  );
+
+  const sectionMembers = sectionId
+    ? await ddb.send(
+        new QueryCommand({
+          TableName: env.membershipsTableName,
+          IndexName: "ensembleId-index",
+          KeyConditionExpression: "ensembleId = :ensembleId",
+          ExpressionAttributeValues: {
+            ":ensembleId": assignment.ensembleId,
+          },
+        }),
+      )
+    : null;
+
+  const notificationTargets = new Set();
+  if (assignment.ownerId !== auth.userId) {
+    notificationTargets.add(assignment.ownerId);
+  }
+  if (sectionMembers?.Items?.length) {
+    sectionMembers.Items.filter((membership) => !sectionId || membership.sectionId === sectionId).forEach(
+      (membership) => {
+        if (membership.userId !== auth.userId) {
+          notificationTargets.add(membership.userId);
+        }
+      },
+    );
+  }
+
+  await Promise.all(
+    [...notificationTargets].map((recipientId) =>
+      createNotification({
+        userId: recipientId,
+        type: "submission",
+        entityType: "submission",
+        entityId: item.submissionId,
+        message: `${getClaims(event).email || "A member"} submitted a practice video.`,
+      }),
+    ),
   );
 
   return response(201, {
@@ -1021,22 +1339,20 @@ const updateSubmission = async (event) => {
     return response(404, { message: "Submission not found" });
   }
 
-  const assignment = await ddb.send(
-    new GetCommand({
-      TableName: env.assignmentsTableName,
-      Key: { assignmentId: existing.Item.assignmentId },
-    }),
-  );
-
-  if (!assignment.Item) {
+  const assignment = await getAssignmentRecord(existing.Item.assignmentId);
+  if (!assignment) {
     return response(404, { message: "Assignment not found" });
   }
 
-  const auth = ensureUser(event);
-  if (!auth.ok) return auth.response;
+  const access = await getEnsembleAccess(event, assignment.ensembleId);
+  if (!access.ok) return access.response;
 
-  const isOwner = existing.Item.ownerId === auth.userId;
-  const isReviewer = assignment.Item.ownerId === auth.userId;
+  if (!canAccessSubmission(access, existing.Item)) {
+    return response(403, { message: "You can only update your own submissions" });
+  }
+
+  const isOwner = existing.Item.ownerId === access.userId;
+  const isReviewer = access.isOwner || access.membership?.role === "director" || access.membership?.role === "leader";
 
   if (!isOwner && !isReviewer) {
     return response(403, { message: "You can only update your own submissions" });
@@ -1058,8 +1374,182 @@ const updateSubmission = async (event) => {
     }),
   );
 
+  if (isReviewer && existing.Item.ownerId !== access.userId) {
+    await createNotification({
+      userId: existing.Item.ownerId,
+      type: "feedback",
+      entityType: "submission",
+      entityId: item.submissionId,
+      message: "Your submission received feedback.",
+    });
+  }
+
   return response(200, {
     submission: safeSubmission(item),
+  });
+};
+
+const listComments = async (event) => {
+  const userId = getUserId(event);
+  const auth = ensureUser(event, userId);
+  if (!auth.ok) return auth.response;
+
+  const submissionId = event.queryStringParameters?.submissionId;
+  if (!submissionId) {
+    return response(400, { message: "Missing submissionId" });
+  }
+
+  const submission = await getSubmissionRecord(submissionId);
+  if (!submission) {
+    return response(404, { message: "Submission not found" });
+  }
+
+  const access = await getEnsembleAccess(event, submission.ensembleId);
+  if (!access.ok) return access.response;
+
+  if (!canAccessSubmission(access, submission)) {
+    return response(403, { message: "You can only access comments on submissions you can see" });
+  }
+
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName: env.commentsTableName,
+      KeyConditionExpression: "submissionId = :submissionId",
+      ExpressionAttributeValues: {
+        ":submissionId": submissionId,
+      },
+    }),
+  );
+
+  return response(200, {
+    comments: (result.Items || []).map(safeComment),
+  });
+};
+
+const createComment = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  const submission = await getSubmissionRecord(body.submissionId || "");
+  if (!submission) {
+    return response(404, { message: "Submission not found" });
+  }
+
+  const access = await getEnsembleAccess(event, submission.ensembleId);
+  if (!access.ok) return access.response;
+
+  if (!canAccessSubmission(access, submission)) {
+    return response(403, { message: "You can only comment on submissions you can see" });
+  }
+
+  const commentId = crypto.randomUUID();
+  const item = {
+    submissionId: submission.submissionId,
+    commentId,
+    authorId: auth.userId,
+    body: body.body || body.message || "",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.commentsTableName,
+      Item: item,
+    }),
+  );
+
+  const recipients = new Set();
+  if (submission.ownerId !== auth.userId) {
+    recipients.add(submission.ownerId);
+  }
+  if (access.ensemble.ownerId !== auth.userId) {
+    recipients.add(access.ensemble.ownerId);
+  }
+
+  await Promise.all(
+    [...recipients].map((recipientId) =>
+      createNotification({
+        userId: recipientId,
+        type: "comment",
+        entityType: "submission",
+        entityId: submission.submissionId,
+        message: "A new comment was added to a submission.",
+      }),
+    ),
+  );
+
+  return response(201, {
+    comment: safeComment(item),
+  });
+};
+
+const listNotifications = async (event) => {
+  const userId = getUserId(event);
+  const auth = ensureUser(event, userId);
+  if (!auth.ok) return auth.response;
+
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName: env.notificationsTableName,
+      KeyConditionExpression: "userId = :userId",
+      ExpressionAttributeValues: {
+        ":userId": userId,
+      },
+    }),
+  );
+
+  return response(200, {
+    notifications: (result.Items || []).map(safeNotification),
+  });
+};
+
+const updateNotification = async (event) => {
+  const userId = getUserId(event);
+  const auth = ensureUser(event, userId);
+  if (!auth.ok) return auth.response;
+
+  const notificationId = event.pathParameters?.notificationId;
+  if (!notificationId) {
+    return response(400, { message: "Missing notificationId" });
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.notificationsTableName,
+      Key: { userId, notificationId },
+    }),
+  );
+
+  if (!result.Item) {
+    return response(404, { message: "Notification not found" });
+  }
+
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const item = {
+    ...result.Item,
+    isRead: body.isRead ?? true,
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.notificationsTableName,
+      Item: item,
+    }),
+  );
+
+  return response(200, {
+    notification: safeNotification(item),
   });
 };
 
@@ -1092,6 +1582,10 @@ exports.handler = async (event) => {
   if (key === "POST /submissions") return createSubmission(event);
   if (key === "GET /submissions/{submissionId}") return getSubmission(event);
   if (key === "PUT /submissions/{submissionId}") return updateSubmission(event);
+  if (key === "GET /comments") return listComments(event);
+  if (key === "POST /comments") return createComment(event);
+  if (key === "GET /notifications") return listNotifications(event);
+  if (key === "PUT /notifications/{notificationId}") return updateNotification(event);
 
   return response(404, {
     message: "Not found",
