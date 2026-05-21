@@ -16,3 +16,14 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "web_app_origin" {
+  description = "Primary browser origin for the app."
+  type        = string
+  default     = "http://localhost:5173"
+}
+
+variable "additional_web_origins" {
+  description = "Additional browser origins that should be allowed to call the app and upload APIs."
+  type        = list(string)
+  default     = []
+}

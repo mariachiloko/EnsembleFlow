@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 1: repository foundation and scaffold.
+Phase 2: backend foundation and data model.
 
 ## Project Standards
 
@@ -43,10 +43,14 @@ Phase 1: repository foundation and scaffold.
 - Added the private worklog in `notes/`.
 - Added the frontend scaffold.
 - Added the Terraform scaffold.
+- Defined the first product data model in docs.
+- Added Terraform resources for Cognito, DynamoDB, S3, Lambda, and API Gateway.
+- Initialized Terraform and generated the lock file.
 
 ## What Still Needs To Happen
 
-- Add AWS resources for auth, API, data, and uploads.
-- Wire the frontend to real backend endpoints.
-- Document the storage and upload flow in plain language.
-- Add the first implementation phase for auth, profiles, and ensemble data.
+- Wire the frontend to the backend endpoints.
+- Add the first real profile and ensemble CRUD handlers.
+- Add upload URL generation.
+- Wire the frontend to the upload flow.
+- Add the first implementation phase for assignments and submissions.

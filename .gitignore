@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+*.zip
 .env
 .env.*
 !.env.example
@@ -15,7 +16,7 @@ terraform/override.tf
 terraform/override.tf.json
 terraform/*_override.tf
 terraform/*_override.tf.json
+terraform/**/*.zip
 
 # Private notes stay local only
 notes/
-
