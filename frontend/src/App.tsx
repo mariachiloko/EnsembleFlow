@@ -1,51 +1,112 @@
-const highlights = [
+import { useEffect, useMemo, useState } from "react";
+import { apiUrl, fetchHealthSignal } from "./lib/api";
+
+const ensembles = [
   {
-    title: "Private profiles",
-    body: "Each user can keep their own profile, picture, and ensemble memberships.",
+    name: "Mariachi Los Soles",
+    role: "Director",
+    sectionCount: 4,
+    members: 18,
+    status: "3 assignments due",
   },
   {
-    title: "Multiple ensembles",
-    body: "A single account can manage more than one group, each with its own sections.",
+    name: "West Campus Wind Ensemble",
+    role: "Member",
+    sectionCount: 6,
+    members: 42,
+    status: "2 practice videos pending",
   },
   {
-    title: "Direct uploads",
-    body: "Photos, logos, and videos are uploaded to S3 through signed URLs.",
+    name: "Worship Collective",
+    role: "Section lead",
+    sectionCount: 5,
+    members: 12,
+    status: "Feedback waiting",
   },
 ];
 
-const phases = [
-  "Auth foundation",
-  "Profile data",
-  "Ensemble setup",
-  "Upload flow",
-  "Assignment tracking",
+const dashboardCards = [
+  {
+    title: "Profile",
+    body: "Store display name, photo, and role information for each account.",
+  },
+  {
+    title: "Ensembles",
+    body: "Manage one or more groups, each with its own sections and members.",
+  },
+  {
+    title: "Uploads",
+    body: "Send profile photos, ensemble logos, and practice videos to S3.",
+  },
+  {
+    title: "Assignments",
+    body: "Track due dates, completion, and feedback for practice work.",
+  },
+];
+
+const rolloutSteps = [
+  "Log in with Cognito",
+  "Create or edit a profile",
+  "Add an ensemble",
+  "Upload photos and logos",
+  "Track assignments and submissions",
 ];
 
 function App() {
+  const [apiState, setApiState] = useState("Checking backend connection...");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkApi() {
+      try {
+        const status = await fetchHealthSignal();
+        if (!cancelled) {
+          setApiState(status);
+        }
+      } catch {
+        if (!cancelled) {
+          setApiState("Backend connection unavailable");
+        }
+      }
+    }
+
+    void checkApi();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const connectionLabel = useMemo(() => {
+    if (!apiUrl) {
+      return "API URL not configured";
+    }
+
+    return apiUrl;
+  }, []);
+
   return (
     <main className="page-shell">
       <section className="hero">
-        <p className="eyebrow">EnsembleFlow</p>
-        <h1>Rehearsal accountability for real music groups.</h1>
-        <p className="lede">
-          A portfolio SaaS scaffold for ensembles that need profile management,
-          section organization, and private uploads without extra complexity.
-        </p>
-        <div className="hero-grid">
+        <div className="hero-topline">
+          <p className="eyebrow">EnsembleFlow</p>
+          <span className="status-chip">{apiState}</span>
+        </div>
+        <div className="hero-grid hero-grid-main">
+          <div>
+            <h1>Keep ensembles organized and accountable.</h1>
+            <p className="lede">
+              EnsembleFlow brings profiles, groups, sections, uploads, and
+              practice tracking into one workspace for music teams.
+            </p>
+          </div>
+
           <article className="panel panel-accent">
-            <h2>What this will show</h2>
-            <ul className="checklist">
-              <li>Authentication</li>
-              <li>Private user data</li>
-              <li>S3-based uploads</li>
-              <li>Serverless backend design</li>
-            </ul>
-          </article>
-          <article className="panel">
-            <h2>Phase 1 focus</h2>
+            <h2>How it works</h2>
             <ol className="phase-list">
-              {phases.map((phase) => (
-                <li key={phase}>{phase}</li>
+              {rolloutSteps.map((step) => (
+                <li key={step}>{step}</li>
               ))}
             </ol>
           </article>
@@ -54,14 +115,49 @@ function App() {
 
       <section className="section">
         <div className="section-header">
-          <h2>Core ideas</h2>
-          <p>Simple product decisions that keep the app cheap and practical.</p>
+          <div>
+            <h2>Workspace overview</h2>
+            <p>Simple dashboard areas for the first version of the app.</p>
+          </div>
+          <p className="section-meta">Connected endpoint: {connectionLabel}</p>
         </div>
-        <div className="card-grid">
-          {highlights.map((item) => (
+
+        <div className="card-grid dashboard-grid">
+          {dashboardCards.map((item) => (
             <article className="panel" key={item.title}>
               <h3>{item.title}</h3>
               <p>{item.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <div>
+            <h2>Example ensembles</h2>
+            <p>Placeholder data that matches the structure the backend will use.</p>
+          </div>
+        </div>
+
+        <div className="ensemble-list">
+          {ensembles.map((ensemble) => (
+            <article className="ensemble-row panel" key={ensemble.name}>
+              <div>
+                <p className="ensemble-role">{ensemble.role}</p>
+                <h3>{ensemble.name}</h3>
+                <p className="ensemble-status">{ensemble.status}</p>
+              </div>
+              <dl className="ensemble-metrics">
+                <div>
+                  <dt>Sections</dt>
+                  <dd>{ensemble.sectionCount}</dd>
+                </div>
+                <div>
+                  <dt>Members</dt>
+                  <dd>{ensemble.members}</dd>
+                </div>
+              </dl>
             </article>
           ))}
         </div>
@@ -71,4 +167,3 @@ function App() {
 }
 
 export default App;
-

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 2: backend foundation and data model.
+Phase 3: frontend wiring and product shell.
 
 ## Project Standards
 
@@ -46,11 +46,12 @@ Phase 2: backend foundation and data model.
 - Defined the first product data model in docs.
 - Added Terraform resources for Cognito, DynamoDB, S3, Lambda, and API Gateway.
 - Initialized Terraform and generated the lock file.
+- Added a dashboard-style frontend shell with backend health awareness.
 
 ## What Still Needs To Happen
 
-- Wire the frontend to the backend endpoints.
 - Add the first real profile and ensemble CRUD handlers.
 - Add upload URL generation.
 - Wire the frontend to the upload flow.
 - Add the first implementation phase for assignments and submissions.
+- Wire the frontend to Cognito and the real backend routes.
