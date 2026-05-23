@@ -8,6 +8,7 @@ const storageKeys = {
   session: "ensembleflow.auth.session",
   pkceVerifier: "ensembleflow.auth.pkce.verifier",
   pkceState: "ensembleflow.auth.pkce.state",
+  portalMode: "ensembleflow.auth.portal",
 } as const;
 
 export type AuthSession = {
@@ -119,6 +120,19 @@ export function clearSession() {
   window.localStorage.removeItem(storageKeys.session);
   window.localStorage.removeItem(storageKeys.pkceVerifier);
   window.localStorage.removeItem(storageKeys.pkceState);
+}
+
+export function saveRequestedPortal(mode: "director" | "member") {
+  window.localStorage.setItem(storageKeys.portalMode, mode);
+}
+
+export function loadRequestedPortal() {
+  const raw = window.localStorage.getItem(storageKeys.portalMode);
+  return raw === "director" ? "director" : "member";
+}
+
+export function clearRequestedPortal() {
+  window.localStorage.removeItem(storageKeys.portalMode);
 }
 
 export function clearPkceState() {

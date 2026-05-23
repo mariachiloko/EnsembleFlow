@@ -59,14 +59,15 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
 }
 
 export type ProfilePayload = {
-  email?: string;
   displayName: string;
+  username: string;
   photoKey?: string;
 };
 
 export type ProfileRecord = {
   userId: string;
   email: string;
+  username: string;
   displayName: string;
   photoKey: string;
 };
@@ -134,7 +135,9 @@ export type CommentPayload = {
 };
 
 export async function getCurrentProfile(token: string) {
-  return request<{ profile: ProfileRecord | null }>("/profiles", { token });
+  return request<{ profile: ProfileRecord | null; isDirectorAccount: boolean }>("/profiles", {
+    token,
+  });
 }
 
 export async function upsertProfile(token: string, payload: ProfilePayload) {
@@ -226,6 +229,7 @@ export async function listMemberships(token: string, ensembleId?: string) {
       userId: string;
       ensembleId: string;
       role: string;
+      status: string;
       sectionId: string;
       sectionName: string;
       joinedAt: string;
@@ -240,6 +244,7 @@ export async function createMembership(token: string, payload: MembershipPayload
       userId: string;
       ensembleId: string;
       role: string;
+      status: string;
       sectionId: string;
       sectionName: string;
       joinedAt: string;
@@ -256,6 +261,35 @@ export async function removeMembership(token: string, userId: string, ensembleId
   return request<{ ok: boolean }>(`/memberships/${userId}/${ensembleId}`, {
     token,
     method: "DELETE",
+  });
+}
+
+export async function updateMembership(
+  token: string,
+  userId: string,
+  ensembleId: string,
+  payload: Partial<{
+    role: string;
+    status: string;
+    sectionId: string;
+    sectionName: string;
+  }>,
+) {
+  return request<{
+    membership: {
+      userId: string;
+      ensembleId: string;
+      role: string;
+      status: string;
+      sectionId: string;
+      sectionName: string;
+      joinedAt: string;
+      updatedAt: string;
+    };
+  }>(`/memberships/${userId}/${ensembleId}`, {
+    token,
+    body: payload,
+    method: "PUT",
   });
 }
 
@@ -337,6 +371,7 @@ export async function listSubmissionsWithScope(
       notes: string;
       reviewStatus: string;
       feedback: string;
+      expiresAt: string;
       createdAt: string;
       updatedAt: string;
     }>;
@@ -355,6 +390,7 @@ export async function createSubmission(token: string, payload: SubmissionPayload
       notes: string;
       reviewStatus: string;
       feedback: string;
+      expiresAt: string;
       createdAt: string;
       updatedAt: string;
     };
@@ -381,6 +417,7 @@ export async function updateSubmission(
       notes: string;
       reviewStatus: string;
       feedback: string;
+      expiresAt: string;
       createdAt: string;
       updatedAt: string;
     };

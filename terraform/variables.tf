@@ -45,3 +45,9 @@ variable "oauth_logout_urls" {
   type        = list(string)
   default     = ["http://localhost:5173"]
 }
+
+variable "director_email_allowlist" {
+  description = "Email addresses allowed to use the director dashboard."
+  type        = list(string)
+  default     = []
+}

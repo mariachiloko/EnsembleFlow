@@ -10,6 +10,7 @@ Typical fields:
 
 - `userId`
 - `email`
+- `username`
 - `displayName`
 - `photoKey`
 - `createdAt`
@@ -38,6 +39,7 @@ Typical fields:
 - `userId`
 - `ensembleId`
 - `role`
+- `status`
 - `sectionId`
 - `sectionName`
 - `joinedAt`
@@ -84,6 +86,18 @@ Typical fields:
 - `notes`
 - `reviewStatus`
 - `feedback`
+- `expiresAt`
+- `createdAt`
+- `updatedAt`
+
+### Username Reservation
+
+Keeps usernames unique across the app.
+
+Typical fields:
+
+- `username`
+- `userId`
 - `createdAt`
 - `updatedAt`
 
@@ -121,6 +135,7 @@ Typical fields:
 - User profiles and ensemble settings live in DynamoDB.
 - File contents live in S3.
 - DynamoDB keeps track of which S3 objects belong to which user or ensemble.
+- Submission items expire after 3 weeks, and submission videos use a dedicated S3 prefix so the bucket lifecycle rule can remove them.
 
 ## Future Records
 

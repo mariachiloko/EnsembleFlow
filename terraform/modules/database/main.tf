@@ -17,6 +17,21 @@ resource "aws_dynamodb_table" "users" {
   }
 }
 
+resource "aws_dynamodb_table" "usernames" {
+  name         = "${local.name_prefix}-usernames"
+  billing_mode  = "PAY_PER_REQUEST"
+  hash_key     = "username"
+
+  attribute {
+    name = "username"
+    type = "S"
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+}
+
 resource "aws_dynamodb_table" "ensembles" {
   name        = "${local.name_prefix}-ensembles"
   billing_mode = "PAY_PER_REQUEST"
@@ -244,6 +259,11 @@ resource "aws_dynamodb_table" "submissions" {
     name            = "ensembleId-index"
     hash_key        = "ensembleId"
     projection_type = "ALL"
+  }
+
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
   }
 
   server_side_encryption {

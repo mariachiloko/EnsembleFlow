@@ -5,6 +5,7 @@ const {
   GetCommand,
   DeleteCommand,
   PutCommand,
+  TransactWriteCommand,
   QueryCommand,
 } = require("@aws-sdk/lib-dynamodb");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
@@ -25,9 +26,23 @@ const env = {
   invitationsTableName: process.env.INVITATIONS_TABLE_NAME,
   notificationsTableName: process.env.NOTIFICATIONS_TABLE_NAME,
   uploadsBucketName: process.env.UPLOADS_BUCKET_NAME,
+  usernamesTableName: process.env.USERNAMES_TABLE_NAME,
+  directorEmailAllowlist: String(process.env.DIRECTOR_EMAIL_ALLOWLIST || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean),
 };
 
 const privilegedRoles = new Set(["director", "co_director", "leader"]);
+const blockedMembershipStatuses = new Set(["blocked"]);
+
+const isDirectorEmail = (email) => {
+  if (!email) {
+    return false;
+  }
+
+  return env.directorEmailAllowlist.includes(String(email).trim().toLowerCase());
+};
 
 const normalizeMembershipRole = (role, allowPrivilegedRoles) => {
   const requestedRole = typeof role === "string" && role.trim() ? role.trim() : "member";
@@ -79,11 +94,27 @@ const ensureUser = (event, targetUserId) => {
 
 const nowIso = () => new Date().toISOString();
 
+const expiresInDays = (days) => Math.floor(Date.now() / 1000) + days * 24 * 60 * 60;
+
+const normalizeUsername = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9._-]/g, "");
+
+  return normalized;
+};
+
+const isBlockedMembership = (membership) =>
+  Boolean(membership && blockedMembershipStatuses.has(String(membership.status || "").toLowerCase()));
+
 const safeProfile = (item) =>
   item
     ? {
         userId: item.userId,
         email: item.email,
+        username: item.username ?? "",
         displayName: item.displayName ?? "",
         photoKey: item.photoKey ?? "",
         createdAt: item.createdAt,
@@ -131,6 +162,7 @@ const safeMembership = (item) =>
         userId: item.userId,
         ensembleId: item.ensembleId,
         role: item.role ?? "member",
+        status: item.status ?? "active",
         sectionId: item.sectionId ?? "",
         sectionName: item.sectionName ?? "",
         joinedAt: item.joinedAt,
@@ -164,6 +196,7 @@ const safeSubmission = (item) =>
         notes: item.notes ?? "",
         reviewStatus: item.reviewStatus ?? "pending",
         feedback: item.feedback ?? "",
+        expiresAt: item.expiresAt ? String(item.expiresAt) : "",
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       }
@@ -377,8 +410,29 @@ const createNotification = async ({ userId, type, entityType, entityId, message 
   return item;
 };
 
+const buildUploadKey = ({ userId, ensembleId, uploadId, fileName, fileType }) => {
+  if (fileType === "submission-video") {
+    return ["submissions", ensembleId || "general", `${uploadId}-${fileName}`].join("/");
+  }
+
+  if (fileType === "profile-photo") {
+    return ["profiles", userId, `${uploadId}-${fileName}`].join("/");
+  }
+
+  if (fileType === "ensemble-logo") {
+    return ["ensembles", ensembleId || "general", `${uploadId}-${fileName}`].join("/");
+  }
+
+  return ["uploads", userId, ensembleId || "personal", `${uploadId}-${fileName}`].join("/");
+};
+
 const hasManagementAccess = (access) =>
-  Boolean(access?.ok && (access.isOwner || privilegedRoles.has(access.membership?.role ?? "")));
+  Boolean(
+    access?.ok &&
+      (access.isOwner ||
+        privilegedRoles.has(access.membership?.role ?? "") ||
+        access.isDirectorAccount),
+  );
 
 const getEnsembleAccess = async (event, ensembleId) => {
   const ensemble = await getEnsembleRecord(ensembleId);
@@ -394,7 +448,14 @@ const getEnsembleAccess = async (event, ensembleId) => {
   if (!auth.ok) return auth.response;
 
   if (ensemble.ownerId === auth.userId) {
-    return { ok: true, userId: auth.userId, ensemble, membership: null, isOwner: true };
+    return {
+      ok: true,
+      userId: auth.userId,
+      ensemble,
+      membership: null,
+      isOwner: true,
+      isDirectorAccount: isDirectorEmail(getClaims(event).email || ""),
+    };
   }
 
   const membership = await getMembershipRecord(auth.userId, ensembleId);
@@ -405,12 +466,20 @@ const getEnsembleAccess = async (event, ensembleId) => {
     };
   }
 
+  if (isBlockedMembership(membership)) {
+    return {
+      ok: false,
+      response: response(403, { message: "Your membership is blocked for this ensemble" }),
+    };
+  }
+
   return {
     ok: true,
     userId: auth.userId,
     ensemble,
     membership,
     isOwner: false,
+    isDirectorAccount: isDirectorEmail(getClaims(event).email || ""),
   };
 };
 
@@ -461,6 +530,7 @@ const getProfile = async (event) => {
 
   return response(200, {
     profile: safeProfile(result.Item),
+    isDirectorAccount: isDirectorEmail(getClaims(event).email || result.Item?.email || ""),
   });
 };
 
@@ -482,21 +552,68 @@ const upsertProfile = async (event) => {
   );
 
   const current = existing.Item || {};
+  const nextUsername = normalizeUsername(body.username || current.username || getClaims(event).email?.split("@")[0] || "");
+  if (!nextUsername) {
+    return response(400, { message: "Username is required." });
+  }
+
+  const currentUsername = normalizeUsername(current.username || "");
   const item = {
     userId,
-    email: body.email || current.email || getClaims(event).email || "",
+    email: current.email || getClaims(event).email || "",
+    username: nextUsername,
     displayName: body.displayName ?? current.displayName ?? "",
     photoKey: body.photoKey ?? current.photoKey ?? "",
     createdAt: current.createdAt || nowIso(),
     updatedAt: nowIso(),
   };
 
-  await ddb.send(
-    new PutCommand({
+  const transactItems = [];
+
+  if (!currentUsername || currentUsername !== nextUsername) {
+    transactItems.push({
+      Put: {
+        TableName: env.usernamesTableName,
+        Item: {
+          username: nextUsername,
+          userId,
+          createdAt: current.createdAt || nowIso(),
+          updatedAt: nowIso(),
+        },
+        ConditionExpression: "attribute_not_exists(username)",
+      },
+    });
+  }
+
+  transactItems.push({
+    Put: {
       TableName: env.usersTableName,
       Item: item,
-    }),
-  );
+    },
+  });
+
+  if (currentUsername && currentUsername !== nextUsername) {
+    transactItems.push({
+      Delete: {
+        TableName: env.usernamesTableName,
+        Key: { username: currentUsername },
+      },
+    });
+  }
+
+  try {
+    await ddb.send(
+      new TransactWriteCommand({
+        TransactItems: transactItems,
+      }),
+    );
+  } catch (error) {
+    if (error?.name === "ConditionalCheckFailedException") {
+      return response(409, { message: "Username already exists." });
+    }
+
+    throw error;
+  }
 
   return response(200, {
     profile: safeProfile(item),
@@ -930,6 +1047,7 @@ const createMembership = async (event) => {
     userId: body.userId || "",
     ensembleId: ensembleAccess.ensemble.ensembleId,
     role: normalizeMembershipRole(body.role, true),
+    status: "active",
     sectionId,
     sectionName,
     joinedAt: nowIso(),
@@ -999,6 +1117,7 @@ const updateMembership = async (event) => {
   const item = {
     ...existing.Item,
     role: body.role ?? existing.Item.role ?? "member",
+    status: body.status ?? existing.Item.status ?? "active",
     sectionId,
     sectionName,
     updatedAt: nowIso(),
@@ -1162,10 +1281,14 @@ const acceptInvitation = async (event) => {
   }
 
   const existingMembership = await getMembershipRecord(targetUserId, invitation.ensembleId);
+  if (existingMembership && isBlockedMembership(existingMembership)) {
+    return response(403, { message: "This account is blocked from the ensemble" });
+  }
   const membershipItem = {
     userId: targetUserId,
     ensembleId: invitation.ensembleId,
     role: normalizeMembershipRole(invitation.role, hasManagementAccess(access)),
+    status: "active",
     sectionId: invitation.sectionId || existingMembership?.sectionId || "",
     sectionName: invitation.sectionName || existingMembership?.sectionName || "",
     joinedAt: existingMembership?.joinedAt || nowIso(),
@@ -1245,13 +1368,13 @@ const presignUpload = async (event) => {
   const fileType = body.fileType || "unknown";
   const ensembleId = body.ensembleId || "";
   const uploadId = crypto.randomUUID();
-  const keyParts = [
-    "uploads",
-    auth.userId,
-    ensembleId || "personal",
-    `${uploadId}-${fileName}`,
-  ];
-  const fileKey = keyParts.join("/");
+  const fileKey = buildUploadKey({
+    userId: auth.userId,
+    ensembleId,
+    uploadId,
+    fileName,
+    fileType,
+  });
 
   const command = new PutObjectCommand({
     Bucket: env.uploadsBucketName,
@@ -1607,6 +1730,7 @@ const createSubmission = async (event) => {
     notes: body.notes || "",
     reviewStatus: "pending",
     feedback: "",
+    expiresAt: expiresInDays(21),
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -1903,6 +2027,7 @@ exports.handler = async (event) => {
 
   if (key === "GET /health") return health();
   if (key === "GET /profiles") return getProfile(event);
+  if (key === "GET /session") return getProfile(event);
   if (key === "POST /profiles") return upsertProfile(event);
   if (key === "GET /profiles/{userId}") return getProfile(event);
   if (key === "PUT /profiles/{userId}") return upsertProfile(event);

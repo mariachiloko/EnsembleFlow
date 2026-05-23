@@ -104,6 +104,7 @@ resource "aws_lambda_function" "this" {
   environment {
     variables = {
       USERS_TABLE_NAME       = var.users_table_name
+      USERNAMES_TABLE_NAME   = var.usernames_table_name
       ENSEMBLES_TABLE_NAME    = var.ensembles_table_name
       MEMBERSHIPS_TABLE_NAME  = var.memberships_table_name
       SECTIONS_TABLE_NAME     = var.sections_table_name
@@ -114,6 +115,7 @@ resource "aws_lambda_function" "this" {
       INVITATIONS_TABLE_NAME  = var.invitations_table_name
       NOTIFICATIONS_TABLE_NAME = var.notifications_table_name
       UPLOADS_BUCKET_NAME     = var.uploads_bucket_name
+      DIRECTOR_EMAIL_ALLOWLIST = join(",", var.director_email_allowlist)
     }
   }
 }
@@ -167,6 +169,7 @@ locals {
     "POST /profiles" = {}
     "GET /profiles/{userId}" = {}
     "PUT /profiles/{userId}" = {}
+    "GET /session" = {}
     "GET /ensembles" = {}
     "POST /ensembles" = {}
     "GET /ensembles/{ensembleId}" = {}

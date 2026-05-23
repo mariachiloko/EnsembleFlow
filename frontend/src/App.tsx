@@ -21,6 +21,7 @@ import {
   listNotifications,
   markNotificationRead,
   removeMembership,
+  updateMembership,
   requestJoin,
   updateSubmission,
   upsertProfile,
@@ -29,13 +30,16 @@ import {
   beginCognitoSignIn,
   buildCognitoLogoutUrl,
   clearSession,
+  clearRequestedPortal,
   cognitoClientId,
   cognitoDomain,
   cognitoLogoutUri,
   cognitoRedirectUri,
+  loadRequestedPortal,
   getAuthStatusText,
   handleCognitoCallback,
   loadStoredSession,
+  saveRequestedPortal,
   type AuthSession,
 } from "./lib/auth";
 import {
@@ -52,7 +56,7 @@ import {
 const dashboardCards = [
   {
     title: "My profile",
-    body: "Store display name, photo, and email for each account.",
+    body: "Store a unique username, display name, and photo for each account.",
   },
   {
     title: "My ensembles",
@@ -74,18 +78,6 @@ const rolloutSteps = [
   "Add an ensemble",
   "Upload photos and logos",
   "Track assignments and submissions",
-];
-
-const navigationSections = [
-  { id: "overview", label: "Overview" },
-  { id: "profile", label: "Profile" },
-  { id: "ensembles", label: "Ensembles" },
-  { id: "structure", label: "Sections" },
-  { id: "assignments", label: "Assignments" },
-  { id: "submissions", label: "Submissions" },
-  { id: "notifications", label: "Updates" },
-  { id: "feedback", label: "Feedback" },
-  { id: "media", label: "Media" },
 ];
 
 const placeholderProfile = demoProfile;
@@ -130,6 +122,8 @@ function App() {
   const [apiState, setApiState] = useState("Checking backend connection...");
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [accessToken, setAccessToken] = useState("");
+  const [portalMode, setPortalMode] = useState<"director" | "member">("member");
+  const [isDirectorAccount, setIsDirectorAccount] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") {
       return "light";
@@ -145,6 +139,7 @@ function App() {
   const [activeSection, setActiveSection] = useState("overview");
   const [tokenDraft, setTokenDraft] = useState("");
   const [profile, setProfile] = useState(placeholderProfile);
+  const [profileUsername, setProfileUsername] = useState("");
   const [remoteEnsembles, setRemoteEnsembles] = useState<Array<{
     ensembleId: string;
     ownerId: string;
@@ -165,6 +160,7 @@ function App() {
     userId: string;
     ensembleId: string;
     role: string;
+    status: string;
     sectionId: string;
     sectionName: string;
     joinedAt: string;
@@ -213,7 +209,7 @@ function App() {
     updatedAt: string;
   }>>([]);
   const [displayName, setDisplayName] = useState(placeholderProfile.displayName);
-  const [email, setEmail] = useState(placeholderProfile.email);
+  const [username, setUsername] = useState("");
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [ensembleName, setEnsembleName] = useState("New ensemble");
@@ -353,6 +349,7 @@ function App() {
     async function loadWorkspace() {
       if (!accessToken) {
         setProfile(placeholderProfile);
+        setProfileUsername("");
         setRemoteEnsembles([]);
         setRemoteSections([]);
         setRemoteMemberships([]);
@@ -370,11 +367,12 @@ function App() {
       setProfile({
         userId: "",
         email: "",
+        username: "",
         displayName: "",
         photoKey: "",
       });
       setDisplayName("");
-      setEmail(sessionClaims.email || "");
+      setUsername("");
 
       try {
         const [profileResponse, ensemblesResponse, notificationsResponse] = await Promise.all([
@@ -388,11 +386,31 @@ function App() {
         if (profileResponse.profile) {
           setProfile(profileResponse.profile);
           setDisplayName(profileResponse.profile.displayName || "");
-          setEmail(profileResponse.profile.email || "");
+          setProfileUsername(profileResponse.profile.username || "");
+          setUsername(profileResponse.profile.username || "");
+        } else {
+          const claimedEmail = sessionClaims.email || "";
+          const fallbackUsername = claimedEmail ? claimedEmail.split("@")[0] : "";
+          setProfileUsername(fallbackUsername);
+          setUsername(fallbackUsername);
+        }
+
+        const requestedPortal = loadRequestedPortal();
+        setIsDirectorAccount(Boolean(profileResponse.isDirectorAccount));
+        if (requestedPortal === "director" && !profileResponse.isDirectorAccount) {
+          setPortalMode("member");
+          setAuthMessage("This email is not approved for director access.");
+          setFormMessage("Director access is limited to approved email addresses.");
+        } else {
+          setPortalMode(requestedPortal);
         }
 
         setRemoteEnsembles(ensemblesResponse.ensembles);
         setRemoteNotifications(notificationsResponse.notifications);
+
+        if (!profileResponse.profile?.username) {
+          setProfileModalOpen(true);
+        }
       } catch (error) {
         if (!cancelled) {
           setFormMessage(error instanceof Error ? error.message : "Could not load workspace data.");
@@ -608,9 +626,6 @@ function App() {
       );
   const visibleComments = remoteComments.length ? remoteComments : demoComments;
   const visibleNotifications = remoteNotifications.length ? remoteNotifications : demoNotifications;
-  const currentEnsemble = displayedEnsembles.find(
-    (ensemble) => ensemble.ensembleId === structureEnsembleId,
-  );
   const sessionClaims = useMemo(() => decodeJwtPayload(authSession?.idToken), [authSession?.idToken]);
   const signedInName = accessToken
     ? (profile.displayName.trim() &&
@@ -618,24 +633,34 @@ function App() {
           ? profile.displayName.trim()
           : sessionClaims.name || sessionClaims.email || "Musician")
     : placeholderProfile.displayName;
-  const signedInEmail = accessToken
-    ? (profile.email.trim() && profile.email !== placeholderProfile.email
-        ? profile.email.trim()
-        : sessionClaims.email || "")
-    : placeholderProfile.email;
+  const signedInEmail = accessToken ? (sessionClaims.email || "") : placeholderProfile.email;
+  const signedInUsername = accessToken
+    ? (profile.username.trim() || profileUsername.trim() || sessionClaims["preferred_username"] || "")
+    : "";
   const avatarInitials = getInitials(signedInName);
   const selectedSubmission =
     visibleSubmissions.find((submission) => submission.submissionId === commentSubmissionId) ||
     visibleSubmissions[0] ||
     null;
-  const isDirectorMode = Boolean(currentEnsemble && currentEnsemble.ownerId === profile.userId) ||
-    visibleMemberships.some(
-      (membership) =>
-        membership.role === "director" || membership.role === "co_director" || membership.role === "leader",
-    );
+  const isDirectorMode = portalMode === "director" && isDirectorAccount;
   const unreadNotificationCount = visibleNotifications.filter((notification) => !notification.isRead).length;
   const showWorkspace = Boolean(accessToken);
-  const workspaceModeLabel = isDirectorMode ? "Management workspace" : "Member workspace";
+  const workspaceModeLabel = isDirectorMode ? "Director dashboard" : "Member dashboard";
+  const navigationItems = isDirectorMode
+    ? [
+        { id: "overview", label: "Overview" },
+        { id: "profile", label: "Profile" },
+        { id: "ensembles", label: "Ensembles" },
+        { id: "assignments", label: "Assignments" },
+      ]
+    : [
+        { id: "overview", label: "Overview" },
+        { id: "profile", label: "Profile" },
+        { id: "ensembles", label: "My ensembles" },
+        { id: "assignments", label: "My assignments" },
+        { id: "submissions", label: "My submissions" },
+        { id: "notifications", label: "Updates" },
+      ];
 
   async function handleApplyToken(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -649,8 +674,9 @@ function App() {
     );
   }
 
-  async function handleSignIn() {
+  async function handlePortalSignIn(mode: "director" | "member") {
     try {
+      saveRequestedPortal(mode);
       await beginCognitoSignIn();
     } catch (error) {
       setAuthMessage(error instanceof Error ? error.message : "Could not start sign-in.");
@@ -659,8 +685,11 @@ function App() {
 
   async function handleSignOut() {
     clearSession();
+    clearRequestedPortal();
     setAuthSession(null);
     setAccessToken("");
+    setPortalMode("member");
+    setIsDirectorAccount(false);
     setTokenDraft("");
     setRemoteEnsembles([]);
     setRemoteSections([]);
@@ -673,7 +702,8 @@ function App() {
     setLastAccessCode("");
     setProfile(placeholderProfile);
     setDisplayName(placeholderProfile.displayName);
-    setEmail(placeholderProfile.email);
+    setProfileUsername("");
+    setUsername("");
     setStructureEnsembleId("");
     setAssignmentEnsembleId("");
     setUploadEnsembleId("");
@@ -747,14 +777,17 @@ function App() {
       }
 
       const result = await upsertProfile(accessToken, {
-        email,
         displayName,
+        username: username.trim(),
         photoKey,
       });
 
       setProfile(result.profile);
+      setProfileUsername(result.profile.username);
+      setUsername(result.profile.username);
       setFormMessage("Profile saved.");
       setProfilePhotoFile(null);
+      setProfileModalOpen(false);
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "Profile save failed.");
     } finally {
@@ -898,6 +931,26 @@ function App() {
       setFormMessage("Member removed.");
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "Member removal failed.");
+    }
+  }
+
+  async function handleBlockMember(userId: string, ensembleId: string) {
+    setFormMessage("Blocking member...");
+    try {
+      const result = await updateMembership(accessToken, userId, ensembleId, {
+        status: "blocked",
+      });
+
+      setRemoteMemberships((current) =>
+        current.map((membership) =>
+          membership.userId === userId && membership.ensembleId === ensembleId
+            ? result.membership
+            : membership,
+        ),
+      );
+      setFormMessage("Member blocked.");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Member block failed.");
     }
   }
 
@@ -1057,38 +1110,54 @@ function App() {
       <main className="auth-shell">
         <section className="auth-hero panel panel-accent">
           <p className="eyebrow">EnsembleFlow</p>
-          <h1>Sign in to manage your ensemble.</h1>
+          <h1>Choose how you want to sign in.</h1>
           <p className="lede">
-            Use the hosted sign-in to create an account or log in with email. Once you are signed in,
-            you can request access to an ensemble with a code and start using the workspace.
+            Directors and members use the same secure Cognito login, but they land on different dashboards.
           </p>
           <p className="muted-copy">
             Sign in with email and password. Use the forgot-password link if you need a reset.
-            Google sign-in is not connected yet.
           </p>
         </section>
 
         <section className="auth-grid">
           <div className="panel form-panel">
-            <h3>Sign in or sign up</h3>
+            <h3>Director access</h3>
             <p className="muted-copy">
               {cognitoDomain && cognitoClientId && cognitoRedirectUri
-                ? "The hosted sign-in is ready and uses email."
+                ? "Use this if your email is approved for the director dashboard."
                 : "Set the sign-in environment variables to enable hosted login."}
             </p>
             <div className="form-actions">
               <button
                 className="button button-primary"
                 type="button"
-                onClick={handleSignIn}
+                onClick={() => handlePortalSignIn("director")}
                 disabled={!cognitoDomain || !cognitoClientId || !cognitoRedirectUri}
               >
-                Continue with email
+                Sign in as director
               </button>
             </div>
-            <p className="muted-copy">The hosted sign-in page supports email sign-up.</p>
+            <p className="muted-copy">Only approved email addresses can use the director dashboard.</p>
+            <p className="muted-copy">Profile edits, ensembles, and assignments live in the director view.</p>
+          </div>
+
+          <div className="panel form-panel">
+            <h3>Member access</h3>
+            <p className="muted-copy">
+              Use this if you are joining an ensemble as a member.
+            </p>
+            <div className="form-actions">
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={() => handlePortalSignIn("member")}
+                disabled={!cognitoDomain || !cognitoClientId || !cognitoRedirectUri}
+              >
+                Sign in as member
+              </button>
+            </div>
+            <p className="muted-copy">Members see their ensembles, assignments, submissions, and section feed.</p>
             <p className="muted-copy">Password resets go through Cognito email recovery.</p>
-            <p className="muted-copy">Google sign-in is not wired up in this environment.</p>
           </div>
 
           <div className="panel form-panel">
@@ -1106,16 +1175,18 @@ function App() {
       <aside className="sidebar panel">
         <div>
           <p className="eyebrow">EnsembleFlow</p>
-          <h2>Workspace</h2>
+          <h2>{workspaceModeLabel}</h2>
           <p className="muted-copy">
-            Manage your profile, ensembles, assignments, submissions, and updates in one place.
+            {isDirectorMode
+              ? "Manage ensembles and assignments from a focused director view."
+              : "Track your ensembles, assignments, submissions, and section updates."}
           </p>
         </div>
 
         <div className="sidebar-status">
           <span className="status-chip">{apiState}</span>
           <span className="status-chip status-chip-muted">{authMessage}</span>
-          <span className="status-chip">{isDirectorMode ? "Admin" : "Member"}</span>
+          <span className="status-chip">{isDirectorMode ? "Director" : "Member"}</span>
         </div>
 
         <div className="sidebar-actions">
@@ -1129,7 +1200,7 @@ function App() {
         </div>
 
         <nav className="sidebar-nav" aria-label="Workspace navigation">
-          {navigationSections.map((item) => (
+          {navigationItems.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -1161,12 +1232,12 @@ function App() {
             </div>
           </div>
           <div className="hero-grid hero-grid-main">
-            <div>
-              <h1>Keep ensembles organized and accountable.</h1>
-              <p className="lede">
-                EnsembleFlow brings profiles, groups, sections, media, and practice tracking into one workspace for music teams.
-              </p>
-            </div>
+          <div>
+            <h1>Keep ensembles organized and accountable.</h1>
+            <p className="lede">
+              EnsembleFlow brings profiles, ensembles, sections, assignments, and submissions into one workspace for music teams.
+            </p>
+          </div>
 
             <article className="panel panel-accent">
               <h2>How it works</h2>
@@ -1189,6 +1260,7 @@ function App() {
                 <p className="muted-copy">
                   {signedInEmail ? signedInEmail : "Your email comes from sign-in."}
                 </p>
+                {signedInUsername ? <p className="muted-copy">@{signedInUsername}</p> : null}
               </div>
               <div className="account-actions">
                 <button className="button button-primary" type="button" onClick={() => setProfileModalOpen(true)}>
@@ -1200,25 +1272,27 @@ function App() {
               </div>
             </article>
 
-            <article className="panel">
-              <h3>Join an ensemble</h3>
-              <p className="muted-copy">Enter a code from a director to request access.</p>
-              <form className="mini-form" onSubmit={handleJoinRequestSubmit}>
-                <label className="field">
-                  <span>Ensemble code</span>
-                  <input
-                    value={joinCodeDraft}
-                    onChange={(event) => setJoinCodeDraft(event.target.value.toUpperCase())}
-                    placeholder="ENTER CODE"
-                  />
-                </label>
-                <div className="form-actions">
-                  <button className="button button-primary" type="submit" disabled={formBusy}>
-                    Request access
-                  </button>
-                </div>
-              </form>
-            </article>
+            {!isDirectorMode ? (
+              <article className="panel">
+                <h3>Join an ensemble</h3>
+                <p className="muted-copy">Enter a code from a director to request access.</p>
+                <form className="mini-form" onSubmit={handleJoinRequestSubmit}>
+                  <label className="field">
+                    <span>Ensemble code</span>
+                    <input
+                      value={joinCodeDraft}
+                      onChange={(event) => setJoinCodeDraft(event.target.value.toUpperCase())}
+                      placeholder="ENTER CODE"
+                    />
+                  </label>
+                  <div className="form-actions">
+                    <button className="button button-primary" type="submit" disabled={formBusy}>
+                      Request access
+                    </button>
+                  </div>
+                </form>
+              </article>
+            ) : null}
           </div>
         </section>
 
@@ -1259,10 +1333,10 @@ function App() {
         <div className="section-header">
           <div>
             <h2>My profile</h2>
-            <p>Create or update your name and profile photo.</p>
+            <p>Update your username, display name, and profile photo.</p>
           </div>
           <p className="section-meta">
-            Current profile: {profile.displayName || "Not loaded yet"}
+            Current profile: {profile.username ? `@${profile.username}` : "Not loaded yet"}
           </p>
         </div>
 
@@ -1274,6 +1348,7 @@ function App() {
             <div>
               <h3>{signedInName}</h3>
               <p className="muted-copy">{signedInEmail || "Your email comes from sign-in."}</p>
+              {signedInUsername ? <p className="muted-copy">@{signedInUsername}</p> : null}
             </div>
           </div>
           <div className="form-actions">
@@ -1296,48 +1371,57 @@ function App() {
           </div>
         </div>
 
-        <form className="panel form-panel" onSubmit={handleEnsembleSubmit}>
-          <div className="form-grid">
-            <label className="field">
-              <span>Ensemble name</span>
-              <input
-                value={ensembleName}
-                onChange={(event) => setEnsembleName(event.target.value)}
-                placeholder="New ensemble"
-              />
-            </label>
-            <label className="field">
-              <span>Logo</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => setEnsembleLogoFile(event.target.files?.[0] ?? null)}
-              />
-            </label>
-          </div>
-          <label className="field">
-            <span>Description</span>
-            <textarea
-              value={ensembleDescription}
-              onChange={(event) => setEnsembleDescription(event.target.value)}
-              placeholder="Short ensemble description"
-              rows={3}
-            />
-          </label>
-          <div className="form-actions">
-            <button className="button button-primary" type="submit" disabled={formBusy}>
-              Save ensemble
-            </button>
-          </div>
-        </form>
+        {isDirectorMode ? (
+          <>
+            <form className="panel form-panel" onSubmit={handleEnsembleSubmit}>
+              <div className="form-grid">
+                <label className="field">
+                  <span>Ensemble name</span>
+                  <input
+                    value={ensembleName}
+                    onChange={(event) => setEnsembleName(event.target.value)}
+                    placeholder="New ensemble"
+                  />
+                </label>
+                <label className="field">
+                  <span>Logo</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => setEnsembleLogoFile(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+              </div>
+              <label className="field">
+                <span>Description</span>
+                <textarea
+                  value={ensembleDescription}
+                  onChange={(event) => setEnsembleDescription(event.target.value)}
+                  placeholder="Short ensemble description"
+                  rows={3}
+                />
+              </label>
+              <div className="form-actions">
+                <button className="button button-primary" type="submit" disabled={formBusy}>
+                  Save ensemble
+                </button>
+              </div>
+            </form>
 
-        {lastAccessCode ? (
-          <article className="panel panel-accent">
-            <h3>Ensemble code</h3>
-            <p className="muted-copy">Share this code with members who need to request access.</p>
-            <p className="access-code">{lastAccessCode}</p>
+            {lastAccessCode ? (
+              <article className="panel panel-accent">
+                <h3>Ensemble code</h3>
+                <p className="muted-copy">Share this code with members who need to request access.</p>
+                <p className="access-code">{lastAccessCode}</p>
+              </article>
+            ) : null}
+          </>
+        ) : (
+          <article className="panel">
+            <h3>Join with a code</h3>
+            <p className="muted-copy">Ask your director for the ensemble code if you are not already in the group.</p>
           </article>
-        ) : null}
+        )}
 
         <div className="ensemble-list">
           {displayedEnsembles.map((ensemble) => (
@@ -1446,7 +1530,6 @@ function App() {
                     <option value="member">Member</option>
                     <option value="leader">Leader</option>
                     <option value="co_director">Co-director</option>
-                    <option value="director">Director</option>
                   </select>
                 </label>
               </div>
@@ -1508,6 +1591,7 @@ function App() {
                   <p className="ensemble-role">
                     Joined {membership.joinedAt ? new Date(membership.joinedAt).toLocaleDateString() : "unknown"}
                   </p>
+                  <p className="ensemble-role">Status: {membership.status || "active"}</p>
                   {isDirectorMode ? (
                     <div className="form-actions">
                       <button
@@ -1517,6 +1601,15 @@ function App() {
                       >
                         Remove from ensemble
                       </button>
+                      {membership.status !== "blocked" ? (
+                        <button
+                          className="button button-secondary"
+                          type="button"
+                          onClick={() => handleBlockMember(membership.userId, membership.ensembleId)}
+                        >
+                          Block member
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -1654,6 +1747,8 @@ function App() {
         </div>
       </section>
 
+      {!isDirectorMode ? (
+        <>
       <section className="section" id="submissions">
         <div className="section-header">
           <div>
@@ -1970,6 +2065,8 @@ function App() {
           </div>
         </form>
       </section>
+        </>
+      ) : null}
 
       {profileModalOpen ? (
         <div
@@ -1984,8 +2081,8 @@ function App() {
           >
             <div className="section-header">
               <div>
-                <h2>Edit profile photo</h2>
-                <p>Update your name and upload a new profile photo.</p>
+                <h2>Edit profile</h2>
+                <p>Update your username, name, and profile photo.</p>
               </div>
               <button
                 className="button button-secondary"
@@ -2005,6 +2102,15 @@ function App() {
                 <p className="muted-copy">{signedInEmail || "Your email comes from sign-in."}</p>
               </div>
             </div>
+
+            <label className="field">
+              <span>Username</span>
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="unique-handle"
+              />
+            </label>
 
             <label className="field">
               <span>Display name</span>

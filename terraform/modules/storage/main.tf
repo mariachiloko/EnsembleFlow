@@ -53,3 +53,19 @@ resource "aws_s3_bucket_cors_configuration" "this" {
   }
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  rule {
+    id     = "expire-submissions"
+    status = "Enabled"
+
+    filter {
+      prefix = "submissions/"
+    }
+
+    expiration {
+      days = 21
+    }
+  }
+}

@@ -18,6 +18,11 @@ variable "allowed_origin" {
   description = "Primary browser origin allowed by CORS."
 }
 
+variable "director_email_allowlist" {
+  type        = list(string)
+  description = "Email addresses allowed to use the director dashboard."
+}
+
 variable "user_pool_id" {
   type        = string
   description = "Cognito user pool ID."
@@ -31,6 +36,11 @@ variable "user_pool_client_id" {
 variable "users_table_name" {
   type        = string
   description = "DynamoDB table for users."
+}
+
+variable "usernames_table_name" {
+  type        = string
+  description = "DynamoDB table for reserved usernames."
 }
 
 variable "ensembles_table_name" {

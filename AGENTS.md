@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 13: member-first workspace refinement and profile modal.
+Phase 14: director/member portal split, unique usernames, and submission cleanup.
 
 ## Project Standards
 
@@ -68,6 +68,11 @@ Phase 13: member-first workspace refinement and profile modal.
 - Refined the signed-in workspace to lead with a member dashboard, profile summary, and profile-edit modal.
 - Removed the inline profile email editor from the main page.
 - Reworded the workspace so regular users see member-focused labels instead of director wording.
+- Added a director/member portal split with separate sign-in entry points.
+- Added an approved director email allowlist.
+- Added unique usernames backed by a reserved-username table.
+- Added blocked membership status support.
+- Added submission expiration metadata and S3 cleanup for submission videos.
 
 ## What Still Needs To Happen
 
@@ -78,3 +83,4 @@ Phase 13: member-first workspace refinement and profile modal.
 - Decide whether to add Google sign-in later as a second identity provider.
 - Verify the first email-based sign-up and password reset flow in the browser after the frontend reloads.
 - Decide whether to add section-specific announcements and section tabs next.
+- Re-run Terraform apply in the AWS account so the live stack picks up the new username, allowlist, and cleanup resources.

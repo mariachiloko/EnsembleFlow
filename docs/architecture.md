@@ -19,8 +19,10 @@ Files belong in S3 because they are large binary objects.
 ## Authentication Path
 
 - Cognito handles sign-in and identity.
+- The frontend shows a director portal or a member portal after sign-in.
+- An approved email address can open the director portal.
 - The frontend uses the signed-in user identity to request API access.
-- API Gateway and Lambda will enforce the app rules later.
+- API Gateway and Lambda enforce the app rules and keep member data scoped to the right ensemble and section.
 
 ## Phase 1 Scope
 
@@ -39,6 +41,7 @@ Planned next pieces:
 The app is meant to support a realistic workflow for ensembles:
 
 - secure login
+- split director/member dashboards
 - user-owned content
 - private uploads
 - serverless APIs

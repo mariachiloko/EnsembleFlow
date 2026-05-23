@@ -14,6 +14,7 @@ That means the first required AWS-authenticated step is:
 - `terraform apply`
 
 At that point, use an AWS profile or another configured credential source for the account that will host the stack.
+If you want to enable a director email allowlist, provide it locally at deploy time through an untracked tfvars file or an environment variable instead of committing it.
 
 ## What Gets Deployed
 
@@ -29,7 +30,9 @@ At that point, use an AWS profile or another configured credential source for th
 
 - copy the Terraform outputs into the frontend environment variables
 - configure the Cognito hosted UI URLs in the browser app
-- test sign-in, profile updates, uploads, assignments, and section feeds
+- test director and member sign-in paths
+- test username setup, profile updates, uploads, assignments, comments, and section feeds
+- verify blocked membership behavior and submission cleanup paths
 
 ## Current Live Stack
 
@@ -46,3 +49,4 @@ Current Terraform outputs:
 
 - The stack is intentionally simple and single-account.
 - No GitHub Actions or automated deploy pipeline is required for the first live deployment.
+- Any changes to the director allowlist, username reservations, or submission expiration rules require another `terraform apply`.

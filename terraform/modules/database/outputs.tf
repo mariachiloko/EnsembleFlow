@@ -3,6 +3,11 @@ output "users_table_name" {
   description = "DynamoDB table for user profiles."
 }
 
+output "usernames_table_name" {
+  value       = aws_dynamodb_table.usernames.name
+  description = "DynamoDB table for reserved usernames."
+}
+
 output "ensembles_table_name" {
   value       = aws_dynamodb_table.ensembles.name
   description = "DynamoDB table for ensembles."
