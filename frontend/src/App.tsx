@@ -8,6 +8,7 @@ import {
   createMessage,
   createMembership,
   createEnsemble,
+  getEnsemble,
   createSection,
   createSubmission,
   createUploadPresign,
@@ -133,6 +134,7 @@ function App() {
     name: string;
     description: string;
     logoKey: string;
+    accessCode?: string;
   }>>([]);
   const [ensembleLogoUrls, setEnsembleLogoUrls] = useState<Record<string, string>>({});
   const [remoteSections, setRemoteSections] = useState<Array<{
@@ -223,6 +225,14 @@ function App() {
   const [ensembleDescription, setEnsembleDescription] = useState("");
   const [ensembleLogoFile, setEnsembleLogoFile] = useState<File | null>(null);
   const [selectedEnsembleLogoFile, setSelectedEnsembleLogoFile] = useState<File | null>(null);
+  const [selectedEnsembleDetails, setSelectedEnsembleDetails] = useState<{
+    ensembleId: string;
+    ownerId: string;
+    name: string;
+    description: string;
+    logoKey: string;
+    accessCode?: string;
+  } | null>(null);
   const [structureEnsembleId, setStructureEnsembleId] = useState("");
   const [sectionName, setSectionName] = useState("Brass");
   const [sectionDescription, setSectionDescription] = useState("");
@@ -367,7 +377,8 @@ function App() {
       if (!accessToken) {
         setProfile(placeholderProfile);
         setProfileUsername("");
-        setRemoteEnsembles([]);
+          setRemoteEnsembles([]);
+          setSelectedEnsembleDetails(null);
         setRemoteSections([]);
         setRemoteMemberships([]);
         setRemoteAssignments([]);
@@ -469,6 +480,34 @@ function App() {
       setUploadEnsembleId(firstEnsembleId);
     }
   }, [remoteEnsembles, structureEnsembleId, assignmentEnsembleId, uploadEnsembleId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSelectedEnsembleDetails() {
+      if (!accessToken || portalMode !== "director" || !structureEnsembleId) {
+        setSelectedEnsembleDetails(null);
+        return;
+      }
+
+      try {
+        const response = await getEnsemble(accessToken, structureEnsembleId);
+        if (!cancelled) {
+          setSelectedEnsembleDetails(response.ensemble);
+        }
+      } catch {
+        if (!cancelled) {
+          setSelectedEnsembleDetails(null);
+        }
+      }
+    }
+
+    void loadSelectedEnsembleDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, portalMode, structureEnsembleId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1115,6 +1154,7 @@ function App() {
         displayName,
         username: nextUsername,
         photoKey,
+        email: signedInEmail || profile.email,
       });
 
       setProfile(result.profile);
@@ -1751,7 +1791,10 @@ function App() {
                   <div>
                     <h3>{selectedDirectorEnsemble.name}</h3>
                     <p>{selectedDirectorEnsemble.description || "No description yet."}</p>
-                    <p className="muted-copy">Ensemble code: {lastAccessCode || "Create a new ensemble to see the code."}</p>
+                    <p className="muted-copy">
+                      Ensemble code:{" "}
+                      {selectedEnsembleDetails?.accessCode || selectedDirectorEnsemble.accessCode || lastAccessCode || "Loading..."}
+                    </p>
                   </div>
                   <div className="form-actions">
                     <button className="button button-secondary" type="button" onClick={openDirectorHome}>

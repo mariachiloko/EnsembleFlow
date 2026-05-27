@@ -42,6 +42,7 @@ resource "aws_iam_role_policy" "lambda" {
           "dynamodb:UpdateItem",
           "dynamodb:Query",
           "dynamodb:Scan",
+          "dynamodb:TransactWriteItems",
         ]
         Resource = [
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.users_table_name}",

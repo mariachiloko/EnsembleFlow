@@ -176,8 +176,22 @@ export async function listEnsembles(token: string) {
       name: string;
       description: string;
       logoKey: string;
+      accessCode?: string;
     }>;
   }>("/ensembles", { token });
+}
+
+export async function getEnsemble(token: string, ensembleId: string) {
+  return request<{
+    ensemble: {
+      ensembleId: string;
+      ownerId: string;
+      name: string;
+      description: string;
+      logoKey: string;
+      accessCode?: string;
+    };
+  }>(`/ensembles/${encodeURIComponent(ensembleId)}`, { token });
 }
 
 export async function createEnsemble(token: string, payload: EnsemblePayload) {
@@ -188,6 +202,7 @@ export async function createEnsemble(token: string, payload: EnsemblePayload) {
       name: string;
       description: string;
       logoKey: string;
+      accessCode?: string;
     };
     accessCode: string;
   }>("/ensembles", {
@@ -209,6 +224,7 @@ export async function updateEnsemble(
       name: string;
       description: string;
       logoKey: string;
+      accessCode?: string;
     };
   }>(`/ensembles/${encodeURIComponent(ensembleId)}`, {
     token,

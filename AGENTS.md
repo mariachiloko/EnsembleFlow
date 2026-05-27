@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 15: member ensemble drill-down, section conversations, and outstanding assignment tracking.
+Phase 16: ensemble code persistence, profile save permission fix, and cleaner director/member drill-down.
 
 ## Project Standards
 
@@ -98,6 +98,9 @@ Phase 15: member ensemble drill-down, section conversations, and outstanding ass
 - Hardened the profile save path so blank or stale username state falls back cleanly and transaction failures do not surface as a generic internal server error.
 - Deployed the new conversations tables and message routes to the live AWS stack.
 - Restored the private director email allowlist in the live Lambda environment after the deploy.
+- Added DynamoDB transaction permission to the Lambda role so profile saves can complete.
+- Loaded the selected director ensemble details so its existing join code can be shown after opening the ensemble.
+- Kept the ensemble join code visible on the opened ensemble screen instead of only showing it after a new ensemble is created.
 
 ## What Still Needs To Happen
 
@@ -113,3 +116,4 @@ Phase 15: member ensemble drill-down, section conversations, and outstanding ass
 - Verify the member ensemble drill-down in the browser after the frontend reloads.
 - Verify the ensemble-first layout in the browser after the frontend reloads.
 - Verify profile save in the browser now that the backend error handling is deployed.
+- Verify the opened director ensemble shows its existing join code after refresh.
