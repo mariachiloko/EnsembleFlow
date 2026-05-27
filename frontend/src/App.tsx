@@ -707,6 +707,7 @@ function App() {
   const activeMemberships = visibleMemberships.filter(
     (membership) => membership.ensembleId === structureEnsembleId,
   );
+  const approvedMemberships = activeMemberships.filter((membership) => membership.status !== "blocked");
   const visibleAssignments = remoteAssignments;
   const visibleSubmissions = remoteSubmissions;
   const visibleComments = remoteComments;
@@ -738,6 +739,9 @@ function App() {
     displayedEnsembles.find((ensemble) => ensemble.ensembleId === structureEnsembleId) || null;
   const selectedDirectorSection =
     visibleSections.find((section) => section.sectionId === selectedDirectorSectionId) || null;
+  const selectedDirectorSectionMemberships = selectedDirectorSection
+    ? activeMemberships.filter((membership) => membership.sectionId === selectedDirectorSection.sectionId)
+    : [];
   const selectedDirectorAssignment =
     visibleAssignments.find((assignment) => assignment.assignmentId === selectedDirectorAssignmentId) || null;
   const selectedSectionAssignments = selectedDirectorSection
@@ -1278,22 +1282,34 @@ function App() {
       setFormMessage("Choose an ensemble before creating a membership.");
       return;
     }
+    if (!membershipUserId) {
+      setFormMessage("Choose a member first.");
+      return;
+    }
 
     setFormBusy(true);
-    setFormMessage("Saving membership...");
+    setFormMessage("Saving member placement...");
 
     try {
       const section = visibleSections.find((item) => item.sectionId === membershipSectionId);
-      const result = await createMembership(accessToken, {
-        ensembleId: structureEnsembleId,
-        userId: membershipUserId,
+      const existingMembership = activeMemberships.find(
+        (membership) => membership.userId === membershipUserId && membership.ensembleId === structureEnsembleId,
+      );
+      const payload = {
         role: membershipRole,
         sectionId: membershipSectionId,
         sectionName: section?.name || "",
-      });
+      };
+      const result = existingMembership
+        ? await updateMembership(accessToken, existingMembership.userId, existingMembership.ensembleId, payload)
+        : await createMembership(accessToken, {
+            ensembleId: structureEnsembleId,
+            userId: membershipUserId,
+            ...payload,
+          });
 
       setRemoteMemberships((current) => [result.membership, ...current]);
-      setFormMessage("Membership saved.");
+      setFormMessage(existingMembership ? "Member updated." : "Member added.");
       setMembershipUserId("");
       setMembershipRole("member");
     } catch (error) {
@@ -3023,15 +3039,21 @@ function App() {
             </form>
 
             <form className="panel form-panel" onSubmit={handleMembershipSubmit}>
-              <h3>Assign member</h3>
+              <h3>Place approved member in section</h3>
               <div className="form-grid">
                 <label className="field">
-                  <span>Member user ID</span>
-                  <input
+                  <span>Approved member</span>
+                  <select
                     value={membershipUserId}
                     onChange={(event) => setMembershipUserId(event.target.value)}
-                    placeholder="member-user-id"
-                  />
+                  >
+                    <option value="">Choose member</option>
+                    {approvedMemberships.map((membership) => (
+                      <option key={`${membership.userId}-${membership.ensembleId}`} value={membership.userId}>
+                        {membership.userId} {membership.sectionName ? `(${membership.sectionName})` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="field">
                   <span>Role</span>
@@ -3061,7 +3083,7 @@ function App() {
               </label>
               <div className="form-actions">
                 <button className="button button-primary" type="submit" disabled={formBusy}>
-                  Save membership
+                  Place member
                 </button>
               </div>
             </form>
@@ -3088,6 +3110,75 @@ function App() {
               <p>Create the first section for the selected ensemble.</p>
             </article>
           )}
+        </div>
+
+        <div className="card-grid dashboard-grid">
+          <article className="panel">
+            <h3>Ensemble members</h3>
+            <p className="muted-copy">Everyone approved for this ensemble.</p>
+            <div className="ensemble-list">
+              {activeMemberships.length ? (
+                activeMemberships.map((membership) => (
+                  <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
+                    <div>
+                      <p className="ensemble-role">User: {membership.userId}</p>
+                      <h3>{membership.sectionName || "Unassigned"}</h3>
+                      <p className="ensemble-status">Role: {membership.role}</p>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <article className="panel">
+                  <h3>No members yet</h3>
+                  <p>Approved members will appear here.</p>
+                </article>
+              )}
+            </div>
+          </article>
+
+          <article className="panel">
+            <h3>Section roster</h3>
+            <p className="muted-copy">Pick a section to see who is in it.</p>
+            <label className="field">
+              <span>Section</span>
+              <select
+                value={selectedDirectorSectionId}
+                onChange={(event) => setSelectedDirectorSectionId(event.target.value)}
+              >
+                <option value="">Choose section</option>
+                {activeSections.map((section) => (
+                  <option key={section.sectionId} value={section.sectionId}>
+                    {section.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="ensemble-list">
+              {selectedDirectorSection ? (
+                selectedDirectorSectionMemberships.length ? (
+                  selectedDirectorSectionMemberships.map((membership) => (
+                    <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
+                      <div>
+                        <p className="ensemble-role">Member: {membership.userId}</p>
+                        <h3>{membership.sectionName || "Section member"}</h3>
+                        <p className="ensemble-status">Role: {membership.role}</p>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <article className="panel">
+                    <h3>No members in this section yet</h3>
+                    <p>Place an approved member into the section from the placement form above.</p>
+                  </article>
+                )
+              ) : (
+                <article className="panel">
+                  <h3>No section selected</h3>
+                  <p>Choose a section to see its roster.</p>
+                </article>
+              )}
+            </div>
+          </article>
         </div>
 
         <div className="ensemble-list">

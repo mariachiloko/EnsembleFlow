@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 16: ensemble code persistence, profile save permission fix, and cleaner director/member drill-down.
+Phase 17: approved member placement and ensemble-vs-section roster views.
 
 ## Project Standards
 
@@ -101,6 +101,9 @@ Phase 16: ensemble code persistence, profile save permission fix, and cleaner di
 - Added DynamoDB transaction permission to the Lambda role so profile saves can complete.
 - Loaded the selected director ensemble details so its existing join code can be shown after opening the ensemble.
 - Kept the ensemble join code visible on the opened ensemble screen instead of only showing it after a new ensemble is created.
+- Replaced the raw member user-id field with an approved-member picker for section placement.
+- Added explicit ensemble roster and section roster views on the director side.
+- Added a section roster panel so the director can compare the full ensemble list against one section at a time.
 
 ## What Still Needs To Happen
 
@@ -117,3 +120,4 @@ Phase 16: ensemble code persistence, profile save permission fix, and cleaner di
 - Verify the ensemble-first layout in the browser after the frontend reloads.
 - Verify profile save in the browser now that the backend error handling is deployed.
 - Verify the opened director ensemble shows its existing join code after refresh.
+- Verify the director section roster and ensemble roster read cleanly in the browser.
