@@ -52,6 +52,8 @@ resource "aws_iam_role_policy" "lambda" {
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.assignments_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.submissions_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.comments_table_name}",
+          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.conversations_table_name}",
+          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.conversation_messages_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.invitations_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.notifications_table_name}",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.users_table_name}/index/*",
@@ -62,6 +64,8 @@ resource "aws_iam_role_policy" "lambda" {
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.assignments_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.submissions_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.comments_table_name}/index/*",
+          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.conversations_table_name}/index/*",
+          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.conversation_messages_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.invitations_table_name}/index/*",
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.notifications_table_name}/index/*",
         ]
@@ -112,6 +116,8 @@ resource "aws_lambda_function" "this" {
       ASSIGNMENTS_TABLE_NAME  = var.assignments_table_name
       SUBMISSIONS_TABLE_NAME  = var.submissions_table_name
       COMMENTS_TABLE_NAME     = var.comments_table_name
+      CONVERSATIONS_TABLE_NAME = var.conversations_table_name
+      CONVERSATION_MESSAGES_TABLE_NAME = var.conversation_messages_table_name
       INVITATIONS_TABLE_NAME  = var.invitations_table_name
       NOTIFICATIONS_TABLE_NAME = var.notifications_table_name
       UPLOADS_BUCKET_NAME     = var.uploads_bucket_name
@@ -175,6 +181,7 @@ locals {
     "GET /ensembles/{ensembleId}" = {}
     "PUT /ensembles/{ensembleId}" = {}
     "POST /uploads/presign" = {}
+    "GET /uploads/url" = {}
     "GET /sections" = {}
     "POST /sections" = {}
     "GET /sections/{sectionId}" = {}
@@ -193,11 +200,16 @@ locals {
     "PUT /submissions/{submissionId}" = {}
     "GET /comments" = {}
     "POST /comments" = {}
+    "GET /conversations" = {}
+    "POST /conversations" = {}
+    "GET /messages" = {}
+    "POST /messages" = {}
     "GET /invitations" = {}
     "POST /invitations" = {}
     "POST /invitations/accept" = {}
     "GET /notifications" = {}
     "PUT /notifications/{notificationId}" = {}
+    "POST /announcements" = {}
   }
 }
 

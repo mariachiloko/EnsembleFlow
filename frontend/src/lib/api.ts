@@ -62,6 +62,7 @@ export type ProfilePayload = {
   displayName: string;
   username: string;
   photoKey?: string;
+  email?: string;
 };
 
 export type ProfileRecord = {
@@ -96,6 +97,7 @@ export type UploadPayload = {
 
 export type AssignmentPayload = {
   ensembleId: string;
+  sectionId?: string;
   title: string;
   description?: string;
   dueDate: string;
@@ -132,6 +134,24 @@ export type SubmissionReviewPayload = {
 export type CommentPayload = {
   submissionId: string;
   body: string;
+};
+
+export type ConversationPayload = {
+  ensembleId: string;
+  sectionId: string;
+  title?: string;
+  participantIds?: string[];
+};
+
+export type MessagePayload = {
+  conversationId: string;
+  body: string;
+};
+
+export type AnnouncementPayload = {
+  ensembleId: string;
+  sectionId?: string;
+  message: string;
 };
 
 export async function getCurrentProfile(token: string) {
@@ -177,6 +197,26 @@ export async function createEnsemble(token: string, payload: EnsemblePayload) {
   });
 }
 
+export async function updateEnsemble(
+  token: string,
+  ensembleId: string,
+  payload: Partial<EnsemblePayload>,
+) {
+  return request<{
+    ensemble: {
+      ensembleId: string;
+      ownerId: string;
+      name: string;
+      description: string;
+      logoKey: string;
+    };
+  }>(`/ensembles/${encodeURIComponent(ensembleId)}`, {
+    token,
+    body: payload,
+    method: "PUT",
+  });
+}
+
 export async function createUploadPresign(token: string, payload: UploadPayload) {
   return request<{
     uploadId: string;
@@ -187,6 +227,11 @@ export async function createUploadPresign(token: string, payload: UploadPayload)
     body: payload,
     method: "POST",
   });
+}
+
+export async function getUploadUrl(token: string, fileKey: string) {
+  const query = `?fileKey=${encodeURIComponent(fileKey)}`;
+  return request<{ url: string }>(`/uploads/url${query}`, { token });
 }
 
 export async function listSections(token: string, ensembleId?: string) {
@@ -304,6 +349,7 @@ export async function listAssignmentsForEnsemble(token: string, ensembleId?: str
       assignmentId: string;
       ownerId: string;
       ensembleId: string;
+      sectionId: string;
       title: string;
       description: string;
       dueDate: string;
@@ -319,6 +365,7 @@ export async function createAssignment(token: string, payload: AssignmentPayload
       assignmentId: string;
       ownerId: string;
       ensembleId: string;
+      sectionId: string;
       title: string;
       description: string;
       dueDate: string;
@@ -332,12 +379,39 @@ export async function createAssignment(token: string, payload: AssignmentPayload
   });
 }
 
+export async function createAnnouncement(token: string, payload: AnnouncementPayload) {
+  return request<{
+    announcement: {
+      ensembleId: string;
+      sectionId: string;
+      message: string;
+    };
+    recipientCount: number;
+  }>("/announcements", {
+    token,
+    body: payload,
+    method: "POST",
+  });
+}
+
 export async function updateAssignment(
   token: string,
   assignmentId: string,
   payload: Partial<AssignmentPayload>,
 ) {
-  return request<{ assignment: { assignmentId: string } }>(
+  return request<{
+    assignment: {
+      assignmentId: string;
+      ownerId: string;
+      ensembleId: string;
+      sectionId: string;
+      title: string;
+      description: string;
+      dueDate: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>(
     `/assignments/${assignmentId}`,
     {
       token,
@@ -452,6 +526,72 @@ export async function createComment(token: string, payload: CommentPayload) {
       updatedAt: string;
     };
   }>("/comments", {
+    token,
+    body: payload,
+    method: "POST",
+  });
+}
+
+export async function listConversations(token: string, ensembleId: string, sectionId: string) {
+  const query = `?ensembleId=${encodeURIComponent(ensembleId)}&sectionId=${encodeURIComponent(sectionId)}`;
+  return request<{
+    conversations: Array<{
+      conversationId: string;
+      ensembleId: string;
+      sectionId: string;
+      title: string;
+      createdBy: string;
+      participantIds: string[];
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }>(`/conversations${query}`, { token });
+}
+
+export async function createConversation(token: string, payload: ConversationPayload) {
+  return request<{
+    conversation: {
+      conversationId: string;
+      ensembleId: string;
+      sectionId: string;
+      title: string;
+      createdBy: string;
+      participantIds: string[];
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>("/conversations", {
+    token,
+    body: payload,
+    method: "POST",
+  });
+}
+
+export async function listMessages(token: string, conversationId: string) {
+  const query = `?conversationId=${encodeURIComponent(conversationId)}`;
+  return request<{
+    messages: Array<{
+      conversationId: string;
+      messageId: string;
+      senderId: string;
+      body: string;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }>(`/messages${query}`, { token });
+}
+
+export async function createMessage(token: string, payload: MessagePayload) {
+  return request<{
+    message: {
+      conversationId: string;
+      messageId: string;
+      senderId: string;
+      body: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>("/messages", {
     token,
     body: payload,
     method: "POST",

@@ -43,6 +43,16 @@ output "comments_table_name" {
   description = "DynamoDB table for submission comments."
 }
 
+output "conversations_table_name" {
+  value       = aws_dynamodb_table.conversations.name
+  description = "DynamoDB table for ensemble conversations."
+}
+
+output "conversation_messages_table_name" {
+  value       = aws_dynamodb_table.conversation_messages.name
+  description = "DynamoDB table for conversation messages."
+}
+
 output "invitations_table_name" {
   value       = aws_dynamodb_table.invitations.name
   description = "DynamoDB table for ensemble invitations."

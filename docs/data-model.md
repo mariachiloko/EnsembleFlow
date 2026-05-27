@@ -114,6 +114,34 @@ Typical fields:
 - `createdAt`
 - `updatedAt`
 
+### Conversation
+
+Stores a section-scoped chat or group thread inside an ensemble.
+
+Typical fields:
+
+- `conversationId`
+- `ensembleId`
+- `sectionId`
+- `title`
+- `createdBy`
+- `participantIds`
+- `createdAt`
+- `updatedAt`
+
+### Conversation Message
+
+Stores one message inside a conversation thread.
+
+Typical fields:
+
+- `conversationId`
+- `messageId`
+- `senderId`
+- `body`
+- `createdAt`
+- `updatedAt`
+
 ### Notification
 
 Stores a lightweight in-app notification for a user.
@@ -136,6 +164,7 @@ Typical fields:
 - File contents live in S3.
 - DynamoDB keeps track of which S3 objects belong to which user or ensemble.
 - Submission items expire after 3 weeks, and submission videos use a dedicated S3 prefix so the bucket lifecycle rule can remove them.
+- Section conversations and messages stay in DynamoDB so members can chat without needing a separate messaging system.
 
 ## Future Records
 
@@ -151,3 +180,4 @@ Later phases may add:
 - progress tracking
 - attendance history
 - section-specific task lists
+- richer direct messaging controls

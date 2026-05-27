@@ -19,6 +19,12 @@ The app uses a single workspace with role-aware navigation.
 - Directors can view the full ensemble feed.
 - Each submission keeps its `sectionId` so the feed can stay scoped correctly.
 
+## Section Messages
+
+- Members can open a section conversation inside an ensemble.
+- Group chats stay scoped to the section so members can coordinate without exposing the whole ensemble.
+- Directors can still see the ensemble-wide picture through the management screens.
+
 ## Comments
 
 - Comments are stored on the submission thread.
@@ -30,5 +36,6 @@ The app uses a single workspace with role-aware navigation.
 - New submissions create in-app notifications.
 - New comments create in-app notifications.
 - Review feedback creates in-app notifications.
+- New section messages create in-app notifications for the people in that thread.
 
 Notifications stay in DynamoDB so the feature is cheap and simple to operate.

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 14: director/member portal split, unique usernames, and submission cleanup.
+Phase 15: member ensemble drill-down, section conversations, and outstanding assignment tracking.
 
 ## Project Standards
 
@@ -73,6 +73,31 @@ Phase 14: director/member portal split, unique usernames, and submission cleanup
 - Added unique usernames backed by a reserved-username table.
 - Added blocked membership status support.
 - Added submission expiration metadata and S3 cleanup for submission videos.
+- Added a director-only navigation flow with home, ensemble, section, assignment, and announcement views.
+- Added section-scoped assignment targeting.
+- Added ensemble announcement fan-out through the notifications system.
+- Added section conversations and group messaging for members.
+- Added a member ensemble drill-down that keeps announcements, section people, messages, and outstanding assignments in one place.
+- Simplified the default workspace so the main page is ensemble-first instead of a long mixed dashboard.
+- Added a safe profile-email backfill path so the backend can remember the sign-in email after the first profile save.
+- Added a local-only director email hint for the browser UI so the director portal opens consistently on this machine.
+- Hid ensemble-specific director navigation until an ensemble is selected so the home view only shows ensemble creation and the list of ensembles.
+- Removed visible API/auth status chips from the signed-in layout so the UI stays product-focused instead of showing backend status.
+- Reduced the director sidebar to product navigation only, with ensemble drill-down kept inside the selected ensemble screen.
+- Standardized successful form saves so they either close the dialog or show a clear success toast.
+- Added signed S3 read URLs so uploaded ensemble logos can render as actual images in the UI.
+- Removed the duplicate ensemble drill-in button cluster so the selected ensemble screen only shows one set of action cards.
+- Added a selected-ensemble photo editor so an ensemble can be updated from its own screen.
+- Stopped auto-opening the profile modal on login so the dashboard loads first.
+- Added a member-facing announcement panel that appears after an ensemble is selected.
+- Removed the member overview/profile duplicates so the member dashboard stays focused on the selected ensemble.
+- Added a profile save fallback username path so blank modal state does not trigger an internal error.
+- Added a member practice upload form that appears after selecting an ensemble.
+- Simplified the member left navigation to the minimal ensemble-focused set.
+- Split the member workspace into an ensemble drill-down so announcements, section people, messages, and assignments open as separate focused views.
+- Hardened the profile save path so blank or stale username state falls back cleanly and transaction failures do not surface as a generic internal server error.
+- Deployed the new conversations tables and message routes to the live AWS stack.
+- Restored the private director email allowlist in the live Lambda environment after the deploy.
 
 ## What Still Needs To Happen
 
@@ -82,5 +107,9 @@ Phase 14: director/member portal split, unique usernames, and submission cleanup
 - Decide whether to add a separate private promotion flow for trusted members who should become directors later.
 - Decide whether to add Google sign-in later as a second identity provider.
 - Verify the first email-based sign-up and password reset flow in the browser after the frontend reloads.
-- Decide whether to add section-specific announcements and section tabs next.
-- Re-run Terraform apply in the AWS account so the live stack picks up the new username, allowlist, and cleanup resources.
+- Verify the new director ensemble, section, assignment, and announcement views in the browser.
+- Verify the profile email backfill keeps director access stable across sign-outs and reloads.
+- Restart the local Vite server after `.env.local` changes so the director hint actually loads into the running frontend.
+- Verify the member ensemble drill-down in the browser after the frontend reloads.
+- Verify the ensemble-first layout in the browser after the frontend reloads.
+- Verify profile save in the browser now that the backend error handling is deployed.

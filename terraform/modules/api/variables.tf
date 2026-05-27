@@ -78,6 +78,16 @@ variable "comments_table_name" {
   description = "DynamoDB table for submission comments."
 }
 
+variable "conversations_table_name" {
+  type        = string
+  description = "DynamoDB table for ensemble conversations."
+}
+
+variable "conversation_messages_table_name" {
+  type        = string
+  description = "DynamoDB table for conversation messages."
+}
+
 variable "invitations_table_name" {
   type        = string
   description = "DynamoDB table for ensemble invitations."

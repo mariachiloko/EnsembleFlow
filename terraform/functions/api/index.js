@@ -8,7 +8,7 @@ const {
   TransactWriteCommand,
   QueryCommand,
 } = require("@aws-sdk/lib-dynamodb");
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -23,6 +23,8 @@ const env = {
   assignmentsTableName: process.env.ASSIGNMENTS_TABLE_NAME,
   submissionsTableName: process.env.SUBMISSIONS_TABLE_NAME,
   commentsTableName: process.env.COMMENTS_TABLE_NAME,
+  conversationsTableName: process.env.CONVERSATIONS_TABLE_NAME,
+  conversationMessagesTableName: process.env.CONVERSATION_MESSAGES_TABLE_NAME,
   invitationsTableName: process.env.INVITATIONS_TABLE_NAME,
   notificationsTableName: process.env.NOTIFICATIONS_TABLE_NAME,
   uploadsBucketName: process.env.UPLOADS_BUCKET_NAME,
@@ -73,6 +75,18 @@ const parseBody = (event) => {
 
 const getClaims = (event) =>
   event.requestContext?.authorizer?.jwt?.claims || {};
+
+const getClaimEmail = (event) => {
+  const claims = getClaims(event);
+  const claimEmail =
+    claims.email ||
+    claims["cognito:username"] ||
+    claims.preferred_username ||
+    claims.username ||
+    "";
+
+  return String(claimEmail || "").trim();
+};
 
 const getUserId = (event) => getClaims(event).sub || "";
 
@@ -176,6 +190,7 @@ const safeAssignment = (item) =>
         assignmentId: item.assignmentId,
         ownerId: item.ownerId,
         ensembleId: item.ensembleId,
+        sectionId: item.sectionId ?? "",
         title: item.title,
         description: item.description ?? "",
         dueDate: item.dueDate ?? "",
@@ -243,6 +258,32 @@ const safeNotification = (item) =>
         entityId: item.entityId ?? "",
         message: item.message ?? "",
         isRead: Boolean(item.isRead),
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }
+    : null;
+
+const safeConversation = (item) =>
+  item
+    ? {
+        conversationId: item.conversationId,
+        ensembleId: item.ensembleId,
+        sectionId: item.sectionId ?? "",
+        createdBy: item.createdBy ?? "",
+        title: item.title ?? "",
+        participantIds: Array.isArray(item.participantIds) ? item.participantIds : [],
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }
+    : null;
+
+const safeConversationMessage = (item) =>
+  item
+    ? {
+        conversationId: item.conversationId,
+        messageId: item.messageId,
+        senderId: item.senderId ?? "",
+        body: item.body ?? "",
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       }
@@ -410,6 +451,40 @@ const createNotification = async ({ userId, type, entityType, entityId, message 
   return item;
 };
 
+const listEnsembleMembershipRecords = async (ensembleId) => {
+  if (!ensembleId) {
+    return [];
+  }
+
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName: env.membershipsTableName,
+      IndexName: "ensembleId-index",
+      KeyConditionExpression: "ensembleId = :ensembleId",
+      ExpressionAttributeValues: {
+        ":ensembleId": ensembleId,
+      },
+    }),
+  );
+
+  return result.Items || [];
+};
+
+const getConversationRecord = async (conversationId) => {
+  if (!conversationId) {
+    return null;
+  }
+
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: env.conversationsTableName,
+      Key: { conversationId },
+    }),
+  );
+
+  return result.Item || null;
+};
+
 const buildUploadKey = ({ userId, ensembleId, uploadId, fileName, fileType }) => {
   if (fileType === "submission-video") {
     return ["submissions", ensembleId || "general", `${uploadId}-${fileName}`].join("/");
@@ -454,7 +529,7 @@ const getEnsembleAccess = async (event, ensembleId) => {
       ensemble,
       membership: null,
       isOwner: true,
-      isDirectorAccount: isDirectorEmail(getClaims(event).email || ""),
+      isDirectorAccount: isDirectorEmail(getClaimEmail(event)),
     };
   }
 
@@ -479,7 +554,7 @@ const getEnsembleAccess = async (event, ensembleId) => {
     ensemble,
     membership,
     isOwner: false,
-    isDirectorAccount: isDirectorEmail(getClaims(event).email || ""),
+    isDirectorAccount: isDirectorEmail(getClaimEmail(event)),
   };
 };
 
@@ -516,6 +591,26 @@ const canAccessSubmission = (access, submission) => {
   );
 };
 
+const canAccessConversation = (access, conversation) => {
+  if (!access?.ok || !conversation) {
+    return false;
+  }
+
+  if (access.isOwner || privilegedRoles.has(access.membership?.role ?? "")) {
+    return true;
+  }
+
+  if (
+    access.membership?.sectionId &&
+    conversation.sectionId &&
+    access.membership.sectionId === conversation.sectionId
+  ) {
+    return true;
+  }
+
+  return Array.isArray(conversation.participantIds) && conversation.participantIds.includes(access.userId);
+};
+
 const getProfile = async (event) => {
   const userId = event.pathParameters?.userId || getUserId(event);
   const auth = ensureUser(event, userId);
@@ -530,7 +625,7 @@ const getProfile = async (event) => {
 
   return response(200, {
     profile: safeProfile(result.Item),
-    isDirectorAccount: isDirectorEmail(getClaims(event).email || result.Item?.email || ""),
+    isDirectorAccount: isDirectorEmail(getClaimEmail(event) || result.Item?.email || ""),
   });
 };
 
@@ -558,9 +653,12 @@ const upsertProfile = async (event) => {
   }
 
   const currentUsername = normalizeUsername(current.username || "");
+  const nextEmail = String(
+    body.email || current.email || getClaimEmail(event) || "",
+  ).trim();
   const item = {
     userId,
-    email: current.email || getClaims(event).email || "",
+    email: nextEmail,
     username: nextUsername,
     displayName: body.displayName ?? current.displayName ?? "",
     photoKey: body.photoKey ?? current.photoKey ?? "",
@@ -608,10 +706,20 @@ const upsertProfile = async (event) => {
       }),
     );
   } catch (error) {
-    if (error?.name === "ConditionalCheckFailedException") {
+    if (
+      error?.name === "ConditionalCheckFailedException" ||
+      error?.name === "TransactionCanceledException"
+    ) {
       return response(409, { message: "Username already exists." });
     }
 
+    console.error("Profile save failed", {
+      userId,
+      currentUsername,
+      nextUsername,
+      errorName: error?.name,
+      errorMessage: error?.message,
+    });
     throw error;
   }
 
@@ -1387,12 +1495,15 @@ const presignUpload = async (event) => {
   const item = {
     uploadId,
     ownerId: auth.userId,
-    ensembleId,
     fileKey,
     fileType,
     contentType,
     createdAt: nowIso(),
   };
+
+  if (ensembleId) {
+    item.ensembleId = ensembleId;
+  }
 
   await ddb.send(
     new PutCommand({
@@ -1408,12 +1519,31 @@ const presignUpload = async (event) => {
   });
 };
 
+const getUploadUrl = async (event) => {
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  const fileKey = String(event.queryStringParameters?.fileKey || "").trim();
+  if (!fileKey) {
+    return response(400, { message: "Missing file key" });
+  }
+
+  const command = new GetObjectCommand({
+    Bucket: env.uploadsBucketName,
+    Key: fileKey,
+  });
+
+  const url = await getSignedUrl(s3, command, { expiresIn: 900 });
+  return response(200, { url });
+};
+
 const listAssignments = async (event) => {
   const userId = getUserId(event);
   const auth = ensureUser(event, userId);
   if (!auth.ok) return auth.response;
 
   const ensembleId = event.queryStringParameters?.ensembleId;
+  const sectionId = event.queryStringParameters?.sectionId;
   let result;
 
   if (ensembleId) {
@@ -1429,6 +1559,29 @@ const listAssignments = async (event) => {
           ":ensembleId": ensembleId,
         },
       }),
+    );
+  } else if (sectionId) {
+    const section = await getSectionRecord(sectionId);
+    if (!section) {
+      return response(404, { message: "Section not found" });
+    }
+
+    const access = await getEnsembleAccess(event, section.ensembleId);
+    if (!access.ok) return access.response;
+
+    result = await ddb.send(
+      new QueryCommand({
+        TableName: env.assignmentsTableName,
+        IndexName: "ensembleId-index",
+        KeyConditionExpression: "ensembleId = :ensembleId",
+        ExpressionAttributeValues: {
+          ":ensembleId": section.ensembleId,
+        },
+      }),
+    );
+
+    result.Items = (result.Items || []).filter(
+      (item) => !item.sectionId || item.sectionId === sectionId,
     );
   } else {
     result = await ddb.send(
@@ -1490,6 +1643,7 @@ const createAssignment = async (event) => {
     assignmentId,
     ownerId: auth.userId,
     ensembleId: ensembleAccess.ensemble.ensembleId,
+    sectionId: body.sectionId || "",
     title: body.title || "",
     description: body.description || "",
     dueDate: body.dueDate || "",
@@ -1540,6 +1694,7 @@ const updateAssignment = async (event) => {
   const item = {
     ...existing.Item,
     ensembleId: body.ensembleId ?? existing.Item.ensembleId ?? "",
+    sectionId: body.sectionId ?? existing.Item.sectionId ?? "",
     title: body.title ?? existing.Item.title ?? "",
     description: body.description ?? existing.Item.description ?? "",
     dueDate: body.dueDate ?? existing.Item.dueDate ?? "",
@@ -1555,6 +1710,76 @@ const updateAssignment = async (event) => {
 
   return response(200, {
     assignment: safeAssignment(item),
+  });
+};
+
+const createAnnouncement = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  const ensembleAccess = await requireManagementAccess(event, body.ensembleId || "");
+  if (!ensembleAccess.ok) return ensembleAccess.response;
+
+  const message = String(body.message || "").trim();
+  if (!message) {
+    return response(400, { message: "Missing announcement message" });
+  }
+
+  const targetSectionId = String(body.sectionId || "").trim();
+  if (targetSectionId) {
+    const section = await getSectionRecord(targetSectionId);
+    if (!section) {
+      return response(404, { message: "Section not found" });
+    }
+
+    if (section.ensembleId !== ensembleAccess.ensemble.ensembleId) {
+      return response(400, { message: "Section does not belong to the selected ensemble" });
+    }
+  }
+
+  const membersResult = await ddb.send(
+    new QueryCommand({
+      TableName: env.membershipsTableName,
+      IndexName: "ensembleId-index",
+      KeyConditionExpression: "ensembleId = :ensembleId",
+      ExpressionAttributeValues: {
+        ":ensembleId": ensembleAccess.ensemble.ensembleId,
+      },
+    }),
+  );
+
+  const recipients = new Set();
+  (membersResult.Items || [])
+    .filter((membership) => !targetSectionId || membership.sectionId === targetSectionId)
+    .filter((membership) => !isBlockedMembership(membership))
+    .forEach((membership) => recipients.add(membership.userId));
+
+  recipients.delete(auth.userId);
+
+  await Promise.all(
+    [...recipients].map((userId) =>
+      createNotification({
+        userId,
+        type: "announcement",
+        entityType: "ensemble",
+        entityId: ensembleAccess.ensemble.ensembleId,
+        message,
+      }),
+    ),
+  );
+
+  return response(201, {
+    announcement: {
+      ensembleId: ensembleAccess.ensemble.ensembleId,
+      sectionId: targetSectionId,
+      message,
+    },
+    recipientCount: recipients.size,
   });
 };
 
@@ -1958,6 +2183,222 @@ const createComment = async (event) => {
   });
 };
 
+const listConversations = async (event) => {
+  const userId = getUserId(event);
+  const auth = ensureUser(event, userId);
+  if (!auth.ok) return auth.response;
+
+  const ensembleId = event.queryStringParameters?.ensembleId || "";
+  if (!ensembleId) {
+    return response(400, { message: "Missing ensembleId" });
+  }
+
+  const access = await getEnsembleAccess(event, ensembleId);
+  if (!access.ok) return access.response;
+
+  const requestedSectionId = event.queryStringParameters?.sectionId || access.membership?.sectionId || "";
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName: env.conversationsTableName,
+      IndexName: "ensembleId-index",
+      KeyConditionExpression: "ensembleId = :ensembleId",
+      ExpressionAttributeValues: {
+        ":ensembleId": ensembleId,
+      },
+    }),
+  );
+
+  const conversations = (result.Items || [])
+    .map(safeConversation)
+    .filter((conversation) => {
+      if (requestedSectionId && conversation.sectionId !== requestedSectionId) {
+        return false;
+      }
+
+      return canAccessConversation(access, conversation);
+    });
+
+  return response(200, {
+    conversations,
+  });
+};
+
+const createConversation = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  const ensembleId = String(body.ensembleId || "").trim();
+  const sectionId = String(body.sectionId || "").trim();
+  const title = String(body.title || "").trim();
+  const participantIds = Array.isArray(body.participantIds)
+    ? [...new Set(body.participantIds.map((value) => String(value || "").trim()).filter(Boolean))]
+    : [];
+
+  if (!ensembleId) {
+    return response(400, { message: "Missing ensembleId" });
+  }
+
+  if (!sectionId) {
+    return response(400, { message: "Missing sectionId" });
+  }
+
+  const access = await getEnsembleAccess(event, ensembleId);
+  if (!access.ok) return access.response;
+
+  const memberships = await listEnsembleMembershipRecords(ensembleId);
+  const sectionMemberships = memberships.filter(
+    (membership) =>
+      membership.sectionId === sectionId && !isBlockedMembership(membership) && membership.status !== "removed",
+  );
+
+  if (!hasManagementAccess(access) && access.membership?.sectionId !== sectionId) {
+    return response(403, { message: "You can only message people in your section" });
+  }
+
+  const allowedParticipantIds = new Set(sectionMemberships.map((membership) => membership.userId));
+  const selectedParticipantIds = participantIds.length
+    ? participantIds.filter((userId) => allowedParticipantIds.has(userId))
+    : [...allowedParticipantIds];
+  const effectiveParticipantIds = new Set([auth.userId, ...selectedParticipantIds]);
+
+  if (!effectiveParticipantIds.size) {
+    return response(400, { message: "Choose at least one participant" });
+  }
+
+  const conversationId = crypto.randomUUID();
+  const item = {
+    conversationId,
+    ensembleId,
+    sectionId,
+    title: title || "Section conversation",
+    createdBy: auth.userId,
+    participantIds: [...effectiveParticipantIds],
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.conversationsTableName,
+      Item: item,
+    }),
+  );
+
+  return response(201, {
+    conversation: safeConversation(item),
+  });
+};
+
+const listMessages = async (event) => {
+  const userId = getUserId(event);
+  const auth = ensureUser(event, userId);
+  if (!auth.ok) return auth.response;
+
+  const conversationId = event.queryStringParameters?.conversationId || "";
+  if (!conversationId) {
+    return response(400, { message: "Missing conversationId" });
+  }
+
+  const conversation = await getConversationRecord(conversationId);
+  if (!conversation) {
+    return response(404, { message: "Conversation not found" });
+  }
+
+  const access = await getEnsembleAccess(event, conversation.ensembleId);
+  if (!access.ok) return access.response;
+
+  if (!canAccessConversation(access, conversation)) {
+    return response(403, { message: "You can only access your section conversations" });
+  }
+
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName: env.conversationMessagesTableName,
+      KeyConditionExpression: "conversationId = :conversationId",
+      ExpressionAttributeValues: {
+        ":conversationId": conversationId,
+      },
+    }),
+  );
+
+  return response(200, {
+    messages: (result.Items || []).map(safeConversationMessage),
+  });
+};
+
+const createMessage = async (event) => {
+  const body = parseBody(event);
+  if (body === null) {
+    return response(400, { message: "Invalid JSON body" });
+  }
+
+  const auth = ensureUser(event);
+  if (!auth.ok) return auth.response;
+
+  const conversationId = String(body.conversationId || "").trim();
+  const messageBody = String(body.body || body.message || "").trim();
+
+  if (!conversationId) {
+    return response(400, { message: "Missing conversationId" });
+  }
+
+  if (!messageBody) {
+    return response(400, { message: "Missing message body" });
+  }
+
+  const conversation = await getConversationRecord(conversationId);
+  if (!conversation) {
+    return response(404, { message: "Conversation not found" });
+  }
+
+  const access = await getEnsembleAccess(event, conversation.ensembleId);
+  if (!access.ok) return access.response;
+
+  if (!canAccessConversation(access, conversation)) {
+    return response(403, { message: "You can only message your section conversations" });
+  }
+
+  const messageId = crypto.randomUUID();
+  const item = {
+    conversationId,
+    messageId,
+    senderId: auth.userId,
+    body: messageBody,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: env.conversationMessagesTableName,
+      Item: item,
+    }),
+  );
+
+  await Promise.all(
+    (Array.isArray(conversation.participantIds) ? conversation.participantIds : [])
+      .filter((participantId) => participantId !== auth.userId)
+      .map((participantId) =>
+        createNotification({
+          userId: participantId,
+          type: "message",
+          entityType: "conversation",
+          entityId: conversationId,
+          message: `New message in ${conversation.title || "your section"}.`,
+        }),
+      ),
+  );
+
+  return response(201, {
+    message: safeConversationMessage(item),
+  });
+};
+
 const listNotifications = async (event) => {
   const userId = getUserId(event);
   const auth = ensureUser(event, userId);
@@ -2036,6 +2477,7 @@ exports.handler = async (event) => {
   if (key === "GET /ensembles/{ensembleId}") return getEnsemble(event);
   if (key === "PUT /ensembles/{ensembleId}") return updateEnsemble(event);
   if (key === "POST /uploads/presign") return presignUpload(event);
+  if (key === "GET /uploads/url") return getUploadUrl(event);
   if (key === "GET /sections") return listSections(event);
   if (key === "POST /sections") return createSection(event);
   if (key === "GET /sections/{sectionId}") return getSection(event);
@@ -2049,12 +2491,17 @@ exports.handler = async (event) => {
   if (key === "POST /assignments") return createAssignment(event);
   if (key === "GET /assignments/{assignmentId}") return getAssignment(event);
   if (key === "PUT /assignments/{assignmentId}") return updateAssignment(event);
+  if (key === "POST /announcements") return createAnnouncement(event);
   if (key === "GET /submissions") return listSubmissions(event);
   if (key === "POST /submissions") return createSubmission(event);
   if (key === "GET /submissions/{submissionId}") return getSubmission(event);
   if (key === "PUT /submissions/{submissionId}") return updateSubmission(event);
   if (key === "GET /comments") return listComments(event);
   if (key === "POST /comments") return createComment(event);
+  if (key === "GET /conversations") return listConversations(event);
+  if (key === "POST /conversations") return createConversation(event);
+  if (key === "GET /messages") return listMessages(event);
+  if (key === "POST /messages") return createMessage(event);
   if (key === "GET /invitations") return listInvitations(event);
   if (key === "POST /invitations") return createInvitation(event);
   if (key === "POST /invitations/accept") return acceptInvitation(event);

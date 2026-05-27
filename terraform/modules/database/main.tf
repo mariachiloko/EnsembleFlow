@@ -292,6 +292,64 @@ resource "aws_dynamodb_table" "comments" {
   }
 }
 
+resource "aws_dynamodb_table" "conversations" {
+  name        = "${local.name_prefix}-conversations"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key    = "conversationId"
+
+  attribute {
+    name = "conversationId"
+    type = "S"
+  }
+
+  attribute {
+    name = "ensembleId"
+    type = "S"
+  }
+
+  attribute {
+    name = "sectionId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "ensembleId-index"
+    hash_key        = "ensembleId"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "sectionId-index"
+    hash_key        = "sectionId"
+    projection_type = "ALL"
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+}
+
+resource "aws_dynamodb_table" "conversation_messages" {
+  name        = "${local.name_prefix}-conversation-messages"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key    = "conversationId"
+  range_key   = "messageId"
+
+  attribute {
+    name = "conversationId"
+    type = "S"
+  }
+
+  attribute {
+    name = "messageId"
+    type = "S"
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+}
+
 resource "aws_dynamodb_table" "invitations" {
   name        = "${local.name_prefix}-invitations"
   billing_mode = "PAY_PER_REQUEST"

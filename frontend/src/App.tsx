@@ -2,26 +2,33 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   apiUrl,
   createAssignment,
+  createAnnouncement,
   createComment,
+  createConversation,
+  createMessage,
   createMembership,
   createEnsemble,
   createSection,
   createSubmission,
   createUploadPresign,
+  getUploadUrl,
   approveJoinRequest,
   fetchHealthSignal,
   getCurrentProfile,
   listAssignmentsForEnsemble,
   listComments,
+  listConversations,
   listMemberships,
   listEnsembles,
   listJoinRequests,
   listSections,
+  listMessages,
   listSubmissionsWithScope,
   listNotifications,
   markNotificationRead,
   removeMembership,
   updateMembership,
+  updateEnsemble,
   requestJoin,
   updateSubmission,
   upsertProfile,
@@ -42,45 +49,19 @@ import {
   saveRequestedPortal,
   type AuthSession,
 } from "./lib/auth";
-import {
-  demoAssignments,
-  demoComments,
-  demoEnsembles,
-  demoMemberships,
-  demoNotifications,
-  demoProfile,
-  demoSections,
-  demoSubmissions,
-} from "./demoData";
 
-const dashboardCards = [
-  {
-    title: "My profile",
-    body: "Store a unique username, display name, and photo for each account.",
-  },
-  {
-    title: "My ensembles",
-    body: "See the groups you belong to and open the one you need.",
-  },
-  {
-    title: "My assignments",
-    body: "Track due dates and see what is expected next.",
-  },
-  {
-    title: "My submissions",
-    body: "Upload practice videos and follow the feedback thread.",
-  },
-];
+const placeholderProfile = {
+  userId: "",
+  email: "",
+  username: "",
+  displayName: "Musician",
+  photoKey: "",
+};
 
-const rolloutSteps = [
-  "Log in",
-  "Create or edit a profile",
-  "Add an ensemble",
-  "Upload photos and logos",
-  "Track assignments and submissions",
-];
-
-const placeholderProfile = demoProfile;
+const localDirectorEmail =
+  typeof import.meta.env.VITE_DIRECTOR_EMAIL === "string"
+    ? import.meta.env.VITE_DIRECTOR_EMAIL.trim().toLowerCase()
+    : "";
 
 function decodeJwtPayload(token?: string) {
   if (!token) {
@@ -124,6 +105,12 @@ function App() {
   const [accessToken, setAccessToken] = useState("");
   const [portalMode, setPortalMode] = useState<"director" | "member">("member");
   const [isDirectorAccount, setIsDirectorAccount] = useState(false);
+  const [directorView, setDirectorView] = useState<
+    "home" | "ensemble" | "sections" | "section" | "assignments" | "assignment" | "announcements"
+  >("home");
+  const [memberView, setMemberView] = useState<
+    "home" | "ensemble" | "announcements" | "section" | "messages" | "assignments"
+  >("home");
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") {
       return "light";
@@ -147,6 +134,7 @@ function App() {
     description: string;
     logoKey: string;
   }>>([]);
+  const [ensembleLogoUrls, setEnsembleLogoUrls] = useState<Record<string, string>>({});
   const [remoteSections, setRemoteSections] = useState<Array<{
     sectionId: string;
     ensembleId: string;
@@ -170,6 +158,7 @@ function App() {
     assignmentId: string;
     ownerId: string;
     ensembleId: string;
+    sectionId: string;
     title: string;
     description: string;
     dueDate: string;
@@ -180,6 +169,24 @@ function App() {
     commentId: string;
     submissionId: string;
     authorId: string;
+    body: string;
+    createdAt: string;
+    updatedAt: string;
+  }>>([]);
+  const [remoteConversations, setRemoteConversations] = useState<Array<{
+    conversationId: string;
+    ensembleId: string;
+    sectionId: string;
+    title: string;
+    createdBy: string;
+    participantIds: string[];
+    createdAt: string;
+    updatedAt: string;
+  }>>([]);
+  const [remoteConversationMessages, setRemoteConversationMessages] = useState<Array<{
+    conversationId: string;
+    messageId: string;
+    senderId: string;
     body: string;
     createdAt: string;
     updatedAt: string;
@@ -215,6 +222,7 @@ function App() {
   const [ensembleName, setEnsembleName] = useState("New ensemble");
   const [ensembleDescription, setEnsembleDescription] = useState("");
   const [ensembleLogoFile, setEnsembleLogoFile] = useState<File | null>(null);
+  const [selectedEnsembleLogoFile, setSelectedEnsembleLogoFile] = useState<File | null>(null);
   const [structureEnsembleId, setStructureEnsembleId] = useState("");
   const [sectionName, setSectionName] = useState("Brass");
   const [sectionDescription, setSectionDescription] = useState("");
@@ -246,12 +254,21 @@ function App() {
   const [assignmentDescription, setAssignmentDescription] = useState("");
   const [assignmentDueDate, setAssignmentDueDate] = useState("");
   const [assignmentEnsembleId, setAssignmentEnsembleId] = useState("");
+  const [assignmentSectionId, setAssignmentSectionId] = useState("");
+  const [selectedDirectorSectionId, setSelectedDirectorSectionId] = useState("");
+  const [selectedDirectorAssignmentId, setSelectedDirectorAssignmentId] = useState("");
   const [submissionAssignmentId, setSubmissionAssignmentId] = useState("");
   const [submissionNotes, setSubmissionNotes] = useState("");
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
   const [reviewSubmissionId, setReviewSubmissionId] = useState("");
   const [reviewStatus, setReviewStatus] = useState("approved");
   const [reviewFeedback, setReviewFeedback] = useState("");
+  const [sectionMessageConversationId, setSectionMessageConversationId] = useState("");
+  const [sectionMessageTitle, setSectionMessageTitle] = useState("");
+  const [sectionMessageBody, setSectionMessageBody] = useState("");
+  const [selectedMemberSectionId, setSelectedMemberSectionId] = useState("");
+  const [conversationParticipantIds, setConversationParticipantIds] = useState<string[]>([]);
+  const [announcementBody, setAnnouncementBody] = useState("");
   const [formMessage, setFormMessage] = useState("");
   const [authMessage, setAuthMessage] = useState("Not signed in.");
   const [formBusy, setFormBusy] = useState(false);
@@ -316,7 +333,7 @@ function App() {
       const stored = loadStoredSession();
       if (stored) {
         setAuthSession(stored);
-        setAccessToken(stored.accessToken);
+        setAccessToken(stored.idToken || stored.accessToken);
         setAuthMessage(getAuthStatusText(stored));
       }
 
@@ -324,7 +341,7 @@ function App() {
         const session = await handleCognitoCallback();
         if (!cancelled && session) {
           setAuthSession(session);
-          setAccessToken(session.accessToken);
+          setAccessToken(session.idToken || session.accessToken);
           setAuthMessage(getAuthStatusText(session));
           window.history.replaceState({}, document.title, window.location.pathname);
           setFormMessage("Signed in.");
@@ -356,11 +373,18 @@ function App() {
         setRemoteAssignments([]);
         setRemoteSubmissions([]);
         setRemoteComments([]);
+        setRemoteConversations([]);
+        setRemoteConversationMessages([]);
         setRemoteNotifications([]);
         setRemoteJoinRequests([]);
         setLastAccessCode("");
         setStructureEnsembleId("");
         setCommentSubmissionId("");
+        setSectionMessageConversationId("");
+        setSectionMessageTitle("");
+        setSectionMessageBody("");
+        setSelectedMemberSectionId("");
+        setConversationParticipantIds([]);
         return;
       }
 
@@ -396,21 +420,22 @@ function App() {
         }
 
         const requestedPortal = loadRequestedPortal();
-        setIsDirectorAccount(Boolean(profileResponse.isDirectorAccount));
-        if (requestedPortal === "director" && !profileResponse.isDirectorAccount) {
+        const localDirectorMatch = Boolean(
+          localDirectorEmail && (sessionClaims.email || "").trim().toLowerCase() === localDirectorEmail,
+        );
+        setIsDirectorAccount(Boolean(profileResponse.isDirectorAccount || localDirectorMatch));
+        if (requestedPortal === "director" && !(profileResponse.isDirectorAccount || localDirectorMatch)) {
           setPortalMode("member");
           setAuthMessage("This email is not approved for director access.");
           setFormMessage("Director access is limited to approved email addresses.");
         } else {
           setPortalMode(requestedPortal);
+          setAuthMessage("Signed in.");
         }
 
         setRemoteEnsembles(ensemblesResponse.ensembles);
         setRemoteNotifications(notificationsResponse.notifications);
 
-        if (!profileResponse.profile?.username) {
-          setProfileModalOpen(true);
-        }
       } catch (error) {
         if (!cancelled) {
           setFormMessage(error instanceof Error ? error.message : "Could not load workspace data.");
@@ -444,6 +469,46 @@ function App() {
       setUploadEnsembleId(firstEnsembleId);
     }
   }, [remoteEnsembles, structureEnsembleId, assignmentEnsembleId, uploadEnsembleId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEnsembleLogos() {
+      if (!accessToken || !remoteEnsembles.length) {
+        setEnsembleLogoUrls({});
+        return;
+      }
+
+      const nextLogoUrls: Record<string, string> = {};
+
+      await Promise.all(
+        remoteEnsembles.map(async (ensemble) => {
+          if (!ensemble.logoKey) {
+            return;
+          }
+
+          try {
+            const result = await getUploadUrl(accessToken, ensemble.logoKey);
+            if (!cancelled) {
+              nextLogoUrls[ensemble.ensembleId] = result.url;
+            }
+          } catch {
+            // Skip logos that fail to resolve.
+          }
+        }),
+      );
+
+      if (!cancelled) {
+        setEnsembleLogoUrls(nextLogoUrls);
+      }
+    }
+
+    void loadEnsembleLogos();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, remoteEnsembles]);
 
   useEffect(() => {
     let cancelled = false;
@@ -594,38 +659,25 @@ function App() {
     return "Live backend connected";
   }, []);
 
-  const displayedEnsembles = remoteEnsembles.length
-    ? remoteEnsembles
-    : demoEnsembles;
-  const visibleSections = remoteSections.length
-    ? remoteSections
-    : demoSections.filter((section) => section.ensembleId === structureEnsembleId || !structureEnsembleId);
-  const visibleMemberships = remoteMemberships.length
-    ? remoteMemberships
-    : demoMemberships.filter(
-        (membership) =>
-          membership.ensembleId === structureEnsembleId || !structureEnsembleId,
-      );
+  const displayedEnsembles = remoteEnsembles;
+  const visibleSections = remoteSections;
+  const visibleMemberships = remoteMemberships;
   const activeSections = visibleSections.filter(
     (section) => section.ensembleId === structureEnsembleId,
   );
   const activeMemberships = visibleMemberships.filter(
     (membership) => membership.ensembleId === structureEnsembleId,
   );
-  const visibleAssignments = remoteAssignments.length
-    ? remoteAssignments
-    : demoAssignments.filter(
-        (assignment) =>
-          assignment.ensembleId === structureEnsembleId || !structureEnsembleId,
-      );
-  const visibleSubmissions = remoteSubmissions.length
-    ? remoteSubmissions
-    : demoSubmissions.filter(
-        (submission) =>
-          submission.ensembleId === structureEnsembleId || !structureEnsembleId,
-      );
-  const visibleComments = remoteComments.length ? remoteComments : demoComments;
-  const visibleNotifications = remoteNotifications.length ? remoteNotifications : demoNotifications;
+  const visibleAssignments = remoteAssignments;
+  const visibleSubmissions = remoteSubmissions;
+  const visibleComments = remoteComments;
+  const visibleNotifications = remoteNotifications;
+  const directorAnnouncements = visibleNotifications.filter(
+    (notification) =>
+      notification.type === "announcement" &&
+      (!structureEnsembleId || notification.entityId === structureEnsembleId),
+  );
+  const latestMemberAnnouncement = directorAnnouncements[0] || null;
   const sessionClaims = useMemo(() => decodeJwtPayload(authSession?.idToken), [authSession?.idToken]);
   const signedInName = accessToken
     ? (profile.displayName.trim() &&
@@ -637,30 +689,178 @@ function App() {
   const signedInUsername = accessToken
     ? (profile.username.trim() || profileUsername.trim() || sessionClaims["preferred_username"] || "")
     : "";
+  const signedInEmailNormalized = signedInEmail.trim().toLowerCase();
   const avatarInitials = getInitials(signedInName);
   const selectedSubmission =
     visibleSubmissions.find((submission) => submission.submissionId === commentSubmissionId) ||
     visibleSubmissions[0] ||
     null;
-  const isDirectorMode = portalMode === "director" && isDirectorAccount;
-  const unreadNotificationCount = visibleNotifications.filter((notification) => !notification.isRead).length;
+  const selectedDirectorEnsemble =
+    displayedEnsembles.find((ensemble) => ensemble.ensembleId === structureEnsembleId) || null;
+  const selectedDirectorSection =
+    visibleSections.find((section) => section.sectionId === selectedDirectorSectionId) || null;
+  const selectedDirectorAssignment =
+    visibleAssignments.find((assignment) => assignment.assignmentId === selectedDirectorAssignmentId) || null;
+  const selectedSectionAssignments = selectedDirectorSection
+    ? visibleAssignments.filter(
+        (assignment) =>
+          assignment.ensembleId === selectedDirectorSection?.ensembleId &&
+          (!assignment.sectionId || assignment.sectionId === selectedDirectorSection.sectionId),
+      )
+    : [];
+  const selectedSectionSubmissions = selectedDirectorSection
+    ? remoteSubmissions.filter((submission) => submission.sectionId === selectedDirectorSection.sectionId)
+    : [];
+  const selectedAssignmentSubmissions = selectedDirectorAssignment
+    ? remoteSubmissions.filter(
+        (submission) => submission.assignmentId === selectedDirectorAssignment.assignmentId,
+      )
+    : [];
+  const isDirectorMode =
+    portalMode === "director" && (isDirectorAccount || signedInEmailNormalized === localDirectorEmail);
+  const selectedMemberAssignments = selectedDirectorEnsemble
+    ? visibleAssignments.filter((assignment) => assignment.ensembleId === selectedDirectorEnsemble.ensembleId)
+    : [];
+  const currentAssignments = isDirectorMode
+    ? visibleAssignments
+    : selectedMemberAssignments;
+  const currentMemberMemberships = !isDirectorMode && selectedDirectorEnsemble
+    ? visibleMemberships.filter(
+        (membership) =>
+          membership.ensembleId === selectedDirectorEnsemble.ensembleId &&
+          membership.userId === profile.userId &&
+          membership.status !== "blocked",
+      )
+    : [];
+  const currentMemberSectionIds = Array.from(
+    new Set(currentMemberMemberships.map((membership) => membership.sectionId).filter(Boolean)),
+  );
+  const selectedMemberSection =
+    currentMemberMemberships.find((membership) => membership.sectionId === selectedMemberSectionId) ||
+    currentMemberMemberships[0] ||
+    null;
+  const currentSectionMemberships = !isDirectorMode && selectedDirectorEnsemble
+    ? visibleMemberships.filter(
+        (membership) =>
+          membership.ensembleId === selectedDirectorEnsemble.ensembleId &&
+          membership.sectionId === selectedMemberSection?.sectionId &&
+          membership.status !== "blocked",
+      )
+    : [];
+  const currentSectionRoster = currentSectionMemberships.filter((membership) => membership.userId !== profile.userId);
+  const currentMemberAssignments = !isDirectorMode && selectedDirectorEnsemble
+    ? visibleAssignments.filter(
+        (assignment) =>
+          assignment.ensembleId === selectedDirectorEnsemble.ensembleId &&
+          (!assignment.sectionId || assignment.sectionId === selectedMemberSection?.sectionId),
+      )
+    : [];
+  const memberSubmittedAssignmentIds = new Set(
+    visibleSubmissions
+      .filter(
+        (submission) =>
+          submission.ownerId === profile.userId &&
+          submission.ensembleId === selectedDirectorEnsemble?.ensembleId,
+      )
+      .map((submission) => submission.assignmentId),
+  );
+  const memberOutstandingAssignments = currentMemberAssignments.filter(
+    (assignment) => !memberSubmittedAssignmentIds.has(assignment.assignmentId),
+  );
+  useEffect(() => {
+    if (!currentMemberSectionIds.length) {
+      return;
+    }
+
+    if (!selectedMemberSectionId || !currentMemberSectionIds.includes(selectedMemberSectionId)) {
+      setSelectedMemberSectionId(currentMemberSectionIds[0]);
+    }
+  }, [currentMemberSectionIds, selectedMemberSectionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadConversations() {
+      if (!accessToken || isDirectorMode || !selectedDirectorEnsemble || !selectedMemberSection?.sectionId) {
+        setRemoteConversations([]);
+        return;
+      }
+
+      try {
+        const response = await listConversations(
+          accessToken,
+          selectedDirectorEnsemble.ensembleId,
+          selectedMemberSection.sectionId,
+        );
+
+        if (cancelled) return;
+
+        setRemoteConversations(response.conversations);
+        if (
+          response.conversations.length &&
+          !response.conversations.some((conversation) => conversation.conversationId === sectionMessageConversationId)
+        ) {
+          setSectionMessageConversationId(response.conversations[0].conversationId);
+        }
+        if (!response.conversations.length) {
+          setSectionMessageConversationId("");
+          setRemoteConversationMessages([]);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setFormMessage(error instanceof Error ? error.message : "Could not load conversations.");
+        }
+      }
+    }
+
+    void loadConversations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    accessToken,
+    isDirectorMode,
+    selectedDirectorEnsemble,
+    selectedMemberSection?.sectionId,
+    sectionMessageConversationId,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadConversationMessages() {
+      if (!accessToken || !sectionMessageConversationId) {
+        setRemoteConversationMessages([]);
+        return;
+      }
+
+      try {
+        const response = await listMessages(accessToken, sectionMessageConversationId);
+        if (!cancelled) {
+          setRemoteConversationMessages(response.messages);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setFormMessage(error instanceof Error ? error.message : "Could not load messages.");
+        }
+      }
+    }
+
+    void loadConversationMessages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, sectionMessageConversationId]);
+
   const showWorkspace = Boolean(accessToken);
-  const workspaceModeLabel = isDirectorMode ? "Director dashboard" : "Member dashboard";
-  const navigationItems = isDirectorMode
-    ? [
-        { id: "overview", label: "Overview" },
-        { id: "profile", label: "Profile" },
-        { id: "ensembles", label: "Ensembles" },
-        { id: "assignments", label: "Assignments" },
-      ]
-    : [
-        { id: "overview", label: "Overview" },
-        { id: "profile", label: "Profile" },
-        { id: "ensembles", label: "My ensembles" },
-        { id: "assignments", label: "My assignments" },
-        { id: "submissions", label: "My submissions" },
-        { id: "notifications", label: "Updates" },
-      ];
+  const navigationItems = [
+    {
+      id: "ensembles",
+      label: isDirectorMode ? "Ensembles" : "My ensembles",
+    },
+  ];
 
   async function handleApplyToken(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -674,6 +874,18 @@ function App() {
     );
   }
 
+  function openProfileEditor() {
+    const fallbackUsername =
+      profile.username.trim() ||
+      profileUsername.trim() ||
+      profile.email.trim().split("@")[0] ||
+      (signedInEmail ? signedInEmail.split("@")[0] : "");
+
+    setUsername(fallbackUsername);
+    setDisplayName(profile.displayName.trim() || signedInName);
+    setProfileModalOpen(true);
+  }
+
   async function handlePortalSignIn(mode: "director" | "member") {
     try {
       saveRequestedPortal(mode);
@@ -683,6 +895,106 @@ function App() {
     }
   }
 
+  function openDirectorHome() {
+    setDirectorView("home");
+    setStructureEnsembleId("");
+    setSelectedDirectorSectionId("");
+    setSelectedDirectorAssignmentId("");
+    setAssignmentSectionId("");
+  }
+
+  function openDirectorEnsemble(ensembleId: string) {
+    setStructureEnsembleId(ensembleId);
+    setAssignmentEnsembleId(ensembleId);
+    setAssignmentSectionId("");
+    setDirectorView("ensemble");
+  }
+
+  function openDirectorSections(ensembleId: string) {
+    setStructureEnsembleId(ensembleId);
+    setSelectedDirectorSectionId("");
+    setSelectedDirectorAssignmentId("");
+    setDirectorView("sections");
+  }
+
+  function openDirectorSection(sectionId: string, ensembleId: string) {
+    setStructureEnsembleId(ensembleId);
+    setSelectedDirectorSectionId(sectionId);
+    setSelectedDirectorAssignmentId("");
+    setDirectorView("section");
+  }
+
+  function openDirectorAssignments(ensembleId: string) {
+    setStructureEnsembleId(ensembleId);
+    setAssignmentEnsembleId(ensembleId);
+    setAssignmentSectionId("");
+    setSelectedDirectorAssignmentId("");
+    setDirectorView("assignments");
+  }
+
+  function openDirectorAssignment(assignmentId: string, ensembleId: string) {
+    const assignment = remoteAssignments.find((item) => item.assignmentId === assignmentId);
+    setStructureEnsembleId(ensembleId);
+    setAssignmentEnsembleId(ensembleId);
+    setAssignmentSectionId(assignment?.sectionId || "");
+    setSelectedDirectorAssignmentId(assignmentId);
+    const submission = remoteSubmissions.find((item) => item.assignmentId === assignmentId) || null;
+    setCommentSubmissionId(submission?.submissionId || "");
+    setReviewSubmissionId(submission?.submissionId || "");
+    setDirectorView("assignment");
+  }
+
+  function openDirectorAnnouncements(ensembleId: string) {
+    setStructureEnsembleId(ensembleId);
+    setDirectorView("announcements");
+  }
+
+  function openMemberEnsemble(ensembleId: string) {
+    setStructureEnsembleId(ensembleId);
+    setAssignmentEnsembleId(ensembleId);
+    setUploadEnsembleId(ensembleId);
+    setAssignmentSectionId("");
+    setCommentSubmissionId("");
+    setSelectedMemberSectionId("");
+    setSectionMessageConversationId("");
+    setSectionMessageTitle("");
+    setSectionMessageBody("");
+    setConversationParticipantIds([]);
+    setMemberView("ensemble");
+    document.getElementById("ensembles")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function openMemberHome() {
+    setStructureEnsembleId("");
+    setAssignmentEnsembleId("");
+    setUploadEnsembleId("");
+    setAssignmentSectionId("");
+    setCommentSubmissionId("");
+    setSelectedMemberSectionId("");
+    setSectionMessageConversationId("");
+    setSectionMessageTitle("");
+    setSectionMessageBody("");
+    setConversationParticipantIds([]);
+    setMemberView("home");
+    document.getElementById("ensembles")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function openMemberAnnouncements() {
+    setMemberView("announcements");
+  }
+
+  function openMemberSection() {
+    setMemberView("section");
+  }
+
+  function openMemberMessages() {
+    setMemberView("messages");
+  }
+
+  function openMemberAssignments() {
+    setMemberView("assignments");
+  }
+
   async function handleSignOut() {
     clearSession();
     clearRequestedPortal();
@@ -690,13 +1002,17 @@ function App() {
     setAccessToken("");
     setPortalMode("member");
     setIsDirectorAccount(false);
-    setTokenDraft("");
+    setDirectorView("home");
+    setMemberView("home");
+      setTokenDraft("");
     setRemoteEnsembles([]);
     setRemoteSections([]);
     setRemoteMemberships([]);
     setRemoteAssignments([]);
     setRemoteSubmissions([]);
     setRemoteComments([]);
+    setRemoteConversations([]);
+    setRemoteConversationMessages([]);
     setRemoteNotifications([]);
     setRemoteJoinRequests([]);
     setLastAccessCode("");
@@ -705,14 +1021,20 @@ function App() {
     setProfileUsername("");
     setUsername("");
     setStructureEnsembleId("");
-    setAssignmentEnsembleId("");
+      setAssignmentEnsembleId("");
+      setAssignmentSectionId("");
     setUploadEnsembleId("");
     setMembershipSectionId("");
     setCommentSubmissionId("");
+    setSectionMessageConversationId("");
+    setSectionMessageTitle("");
+    setSectionMessageBody("");
+    setSelectedMemberSectionId("");
+    setConversationParticipantIds([]);
     setCommentBody("");
-    setProfileModalOpen(false);
-    setAuthMessage("Signed out.");
-    setFormMessage("Signed out.");
+      setProfileModalOpen(false);
+      setAuthMessage("Signed out.");
+      setFormMessage("Signed out.");
 
     const logoutUrl = buildCognitoLogoutUrl();
     if (logoutUrl) {
@@ -770,6 +1092,19 @@ function App() {
     setFormMessage("Saving profile...");
 
     try {
+      const nextUsername =
+        username.trim() ||
+        profile.username.trim() ||
+        profileUsername.trim() ||
+        profile.email.trim().split("@")[0] ||
+        (signedInEmail ? signedInEmail.split("@")[0] : "");
+
+      if (!nextUsername) {
+        setFormMessage("Username is required.");
+        setFormBusy(false);
+        return;
+      }
+
       let photoKey = profile.photoKey;
 
       if (profilePhotoFile) {
@@ -778,14 +1113,14 @@ function App() {
 
       const result = await upsertProfile(accessToken, {
         displayName,
-        username: username.trim(),
+        username: nextUsername,
         photoKey,
       });
 
       setProfile(result.profile);
       setProfileUsername(result.profile.username);
       setUsername(result.profile.username);
-      setFormMessage("Profile saved.");
+      setFormMessage("Profile saved successfully.");
       setProfilePhotoFile(null);
       setProfileModalOpen(false);
     } catch (error) {
@@ -816,11 +1151,49 @@ function App() {
       setRemoteEnsembles((current) => [result.ensemble, ...current]);
       setLastAccessCode(result.accessCode || "");
       setFormMessage("Ensemble saved.");
+      setStructureEnsembleId(result.ensemble.ensembleId);
+      setAssignmentEnsembleId(result.ensemble.ensembleId);
+      setDirectorView("ensemble");
       setEnsembleName("");
       setEnsembleDescription("");
       setEnsembleLogoFile(null);
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "Ensemble save failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function handleSelectedEnsembleLogoSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedDirectorEnsemble) {
+      setFormMessage("Choose an ensemble first.");
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Saving ensemble photo...");
+
+    try {
+      let logoKey = selectedDirectorEnsemble.logoKey;
+
+      if (selectedEnsembleLogoFile) {
+        logoKey = await uploadFileToS3(selectedEnsembleLogoFile, "ensemble-logo", selectedDirectorEnsemble.ensembleId);
+      }
+
+      const result = await updateEnsemble(accessToken, selectedDirectorEnsemble.ensembleId, {
+        logoKey,
+      });
+
+      setRemoteEnsembles((current) =>
+        current.map((ensemble) =>
+          ensemble.ensembleId === result.ensemble.ensembleId ? result.ensemble : ensemble,
+        ),
+      );
+      setSelectedEnsembleLogoFile(null);
+      setFormMessage("Ensemble photo saved successfully.");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Ensemble photo save failed.");
     } finally {
       setFormBusy(false);
     }
@@ -848,6 +1221,8 @@ function App() {
         setMembershipSectionId(result.section.sectionId);
       }
       setFormMessage("Section saved.");
+      setSelectedDirectorSectionId(result.section.sectionId);
+      setDirectorView("section");
       setSectionName("");
       setSectionDescription("");
     } catch (error) {
@@ -988,6 +1363,7 @@ function App() {
     try {
       const result = await createAssignment(accessToken, {
         ensembleId: assignmentEnsembleId,
+        sectionId: assignmentSectionId || undefined,
         title: assignmentTitle,
         description: assignmentDescription,
         dueDate: assignmentDueDate,
@@ -995,11 +1371,43 @@ function App() {
 
       setRemoteAssignments((current) => [result.assignment, ...current]);
       setFormMessage("Assignment saved.");
+      setSelectedDirectorAssignmentId(result.assignment.assignmentId);
+      setDirectorView("assignment");
       setAssignmentTitle("New assignment");
       setAssignmentDescription("");
       setAssignmentDueDate("");
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "Assignment save failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function handleAnnouncementSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!structureEnsembleId) {
+      setFormMessage("Choose an ensemble before posting an announcement.");
+      return;
+    }
+
+    if (!announcementBody.trim()) {
+      setFormMessage("Enter an announcement before posting.");
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Posting announcement...");
+
+    try {
+      const result = await createAnnouncement(accessToken, {
+        ensembleId: structureEnsembleId,
+        message: announcementBody.trim(),
+      });
+
+      setFormMessage(`Announcement posted to ${result.recipientCount} members.`);
+      setAnnouncementBody("");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Announcement failed.");
     } finally {
       setFormBusy(false);
     }
@@ -1105,6 +1513,801 @@ function App() {
     }
   }
 
+  async function handleConversationSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedDirectorEnsemble || !selectedMemberSection?.sectionId) {
+      setFormMessage("Open an ensemble and choose a section first.");
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Creating conversation...");
+
+    try {
+      const result = await createConversation(accessToken, {
+        ensembleId: selectedDirectorEnsemble.ensembleId,
+        sectionId: selectedMemberSection.sectionId,
+        title: sectionMessageTitle.trim(),
+        participantIds: conversationParticipantIds,
+      });
+
+      setRemoteConversations((current) => [result.conversation, ...current]);
+      setSectionMessageConversationId(result.conversation.conversationId);
+      setSectionMessageTitle("");
+      setConversationParticipantIds([]);
+      setFormMessage("Conversation created.");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Conversation save failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function handleMessageSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!sectionMessageConversationId) {
+      setFormMessage("Choose a conversation first.");
+      return;
+    }
+
+    if (!sectionMessageBody.trim()) {
+      setFormMessage("Enter a message first.");
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Sending message...");
+
+    try {
+      const result = await createMessage(accessToken, {
+        conversationId: sectionMessageConversationId,
+        body: sectionMessageBody.trim(),
+      });
+
+      setRemoteConversationMessages((current) => [...current, result.message]);
+      setSectionMessageBody("");
+      setFormMessage("Message sent.");
+      await reloadNotifications();
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Message save failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  if (isDirectorMode) {
+    return (
+      <main className="app-shell">
+        <aside className="sidebar panel">
+          <div>
+            <p className="eyebrow">EnsembleFlow</p>
+            <h2>Director dashboard</h2>
+            <p className="muted-copy">Manage ensembles, sections, assignments, and announcements.</p>
+          </div>
+
+          <div className="sidebar-actions">
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+            >
+              {theme === "dark" ? "Light mode" : "Dark mode"}
+            </button>
+            <button className="button button-primary" type="button" onClick={openDirectorHome}>
+              Home
+            </button>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={() => selectedDirectorEnsemble && openDirectorEnsemble(selectedDirectorEnsemble.ensembleId)}
+            >
+              Ensembles
+            </button>
+          </div>
+        </aside>
+
+        <div className="workspace">
+          <section className="hero" id="overview">
+            <div className="hero-topline">
+              <p className="eyebrow">EnsembleFlow</p>
+            </div>
+            <div className="hero-grid hero-grid-main">
+              <div>
+                <h1>Manage the ensemble from one place.</h1>
+                <p className="lede">
+                  Create ensembles, open sections, add assignments, and post announcements without mixing in member tools.
+                </p>
+              </div>
+
+              <article className="panel panel-accent">
+                <h2>Current focus</h2>
+                <p>
+                  {selectedDirectorEnsemble
+                    ? `${selectedDirectorEnsemble.name} is selected.`
+                    : "Create an ensemble or open an existing one to manage it."}
+                </p>
+              </article>
+            </div>
+
+            <div className="card-grid dashboard-grid">
+              <article className="panel account-card">
+                <div className="avatar-circle" aria-hidden="true">
+                  {avatarInitials}
+                </div>
+                <div className="account-copy">
+                  <p className="eyebrow">Signed in</p>
+                  <h2>Hello, {signedInName}</h2>
+                  <p className="muted-copy">{signedInEmail || "Your email comes from sign-in."}</p>
+                  {signedInUsername ? <p className="muted-copy">@{signedInUsername}</p> : null}
+                </div>
+                <div className="account-actions">
+                  <button className="button button-primary" type="button" onClick={openProfileEditor}>
+                    Edit profile photo
+                  </button>
+                  <button className="button button-secondary" type="button" onClick={handleSignOut}>
+                    Sign out
+                  </button>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section className="section">
+            <div className="section-header">
+              <div>
+                <h2>{directorView === "home" ? "Ensembles" : selectedDirectorEnsemble?.name || "Ensemble"}</h2>
+                <p>
+                  {directorView === "home"
+                    ? "Create a new ensemble or open an existing one."
+                    : "Use page buttons to move between sections, assignments, and announcements."}
+                </p>
+              </div>
+              <div className="form-actions">
+                {directorView !== "home" ? (
+                  <button className="button button-secondary" type="button" onClick={openDirectorHome}>
+                    Back home
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {directorView === "home" ? (
+              <>
+                <form className="panel form-panel" onSubmit={handleEnsembleSubmit}>
+                  <div className="form-grid">
+                    <label className="field">
+                      <span>Ensemble name</span>
+                      <input
+                        value={ensembleName}
+                        onChange={(event) => setEnsembleName(event.target.value)}
+                        placeholder="New ensemble"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Logo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => setEnsembleLogoFile(event.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                  </div>
+                  <label className="field">
+                    <span>Description</span>
+                    <textarea
+                      value={ensembleDescription}
+                      onChange={(event) => setEnsembleDescription(event.target.value)}
+                      placeholder="Short ensemble description"
+                      rows={3}
+                    />
+                  </label>
+                  <div className="form-actions">
+                    <button className="button button-primary" type="submit" disabled={formBusy}>
+                      Add ensemble
+                    </button>
+                  </div>
+                </form>
+
+                <div className="ensemble-list">
+                  {displayedEnsembles.length ? (
+                    displayedEnsembles.map((ensemble) => (
+                      <article className="ensemble-row panel" key={ensemble.ensembleId}>
+                        <div>
+                          <p className="ensemble-role">Owner: {ensemble.ownerId}</p>
+                          <h3>{ensemble.name}</h3>
+                          <p className="ensemble-status">{ensemble.description || "No description yet."}</p>
+                          {ensembleLogoUrls[ensemble.ensembleId] ? (
+                            <img
+                              className="ensemble-logo-preview"
+                              src={ensembleLogoUrls[ensemble.ensembleId]}
+                              alt={`${ensemble.name} logo`}
+                            />
+                          ) : null}
+                        </div>
+                        <div className="form-actions">
+                          <button
+                            className="button button-primary"
+                            type="button"
+                            onClick={() => openDirectorEnsemble(ensemble.ensembleId)}
+                          >
+                            Open ensemble
+                          </button>
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <article className="panel">
+                      <h3>No ensembles yet</h3>
+                      <p>Create the first ensemble to start organizing sections and assignments.</p>
+                    </article>
+                  )}
+                </div>
+              </>
+            ) : null}
+
+            {directorView === "ensemble" && selectedDirectorEnsemble ? (
+              <div className="panel form-panel">
+                <div className="section-header">
+                  <div>
+                    <h3>{selectedDirectorEnsemble.name}</h3>
+                    <p>{selectedDirectorEnsemble.description || "No description yet."}</p>
+                    <p className="muted-copy">Ensemble code: {lastAccessCode || "Create a new ensemble to see the code."}</p>
+                  </div>
+                  <div className="form-actions">
+                    <button className="button button-secondary" type="button" onClick={openDirectorHome}>
+                      Home
+                    </button>
+                  </div>
+                </div>
+
+                <div className="card-grid dashboard-grid">
+                  <form className="panel form-panel" onSubmit={handleSelectedEnsembleLogoSubmit}>
+                    <h3>Ensemble photo</h3>
+                    {ensembleLogoUrls[selectedDirectorEnsemble.ensembleId] ? (
+                      <img
+                        className="ensemble-logo-preview"
+                        src={ensembleLogoUrls[selectedDirectorEnsemble.ensembleId]}
+                        alt={`${selectedDirectorEnsemble.name} logo`}
+                      />
+                    ) : (
+                      <p className="muted-copy">No photo uploaded yet.</p>
+                    )}
+                    <label className="field">
+                      <span>Upload photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => setSelectedEnsembleLogoFile(event.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                    <div className="form-actions">
+                      <button className="button button-primary" type="submit" disabled={formBusy}>
+                        Save photo
+                      </button>
+                    </div>
+                  </form>
+
+                  <article className="panel">
+                    <h3>Sections</h3>
+                    <p>{visibleSections.filter((section) => section.ensembleId === selectedDirectorEnsemble.ensembleId).length} sections</p>
+                    <button className="button button-primary" type="button" onClick={() => openDirectorSections(selectedDirectorEnsemble.ensembleId)}>
+                      Open sections
+                    </button>
+                  </article>
+                  <article className="panel">
+                    <h3>Assignments</h3>
+                    <p>{visibleAssignments.filter((assignment) => assignment.ensembleId === selectedDirectorEnsemble.ensembleId).length} assignments</p>
+                    <button className="button button-primary" type="button" onClick={() => openDirectorAssignments(selectedDirectorEnsemble.ensembleId)}>
+                      Open assignments
+                    </button>
+                  </article>
+                  <article className="panel">
+                    <h3>Announcements</h3>
+                    <p>Post updates to the whole ensemble inbox.</p>
+                    <button className="button button-primary" type="button" onClick={() => openDirectorAnnouncements(selectedDirectorEnsemble.ensembleId)}>
+                      Open announcements
+                    </button>
+                  </article>
+                </div>
+
+                <div className="ensemble-list">
+                  {activeMemberships.length ? (
+                    activeMemberships.map((membership) => (
+                      <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
+                        <div>
+                          <p className="ensemble-role">User: {membership.userId}</p>
+                          <h3>{membership.sectionName || "Unassigned"}</h3>
+                          <p className="ensemble-status">Role: {membership.role}</p>
+                          <p className="ensemble-role">Status: {membership.status || "active"}</p>
+                        </div>
+                        <div className="form-actions">
+                          <button className="button button-secondary" type="button" onClick={() => handleRemoveMember(membership.userId, membership.ensembleId)}>
+                            Remove
+                          </button>
+                          {membership.status !== "blocked" ? (
+                            <button className="button button-secondary" type="button" onClick={() => handleBlockMember(membership.userId, membership.ensembleId)}>
+                              Block
+                            </button>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <article className="panel">
+                      <h3>No members yet</h3>
+                      <p>Add people to the ensemble to start building sections.</p>
+                    </article>
+                  )}
+                </div>
+
+                <div className="section">
+                  <div className="section-header">
+                    <div>
+                      <h3>Join requests</h3>
+                      <p>Approve requests from members who entered the ensemble code.</p>
+                    </div>
+                  </div>
+                  <div className="ensemble-list">
+                    {remoteJoinRequests.length ? (
+                      remoteJoinRequests.map((request) => (
+                        <article className="ensemble-row panel" key={request.inviteCode}>
+                          <div>
+                            <p className="ensemble-role">{request.inviteeEmail || request.inviteeUserId}</p>
+                            <h3>{request.role}</h3>
+                            <p className="ensemble-status">{request.sectionName || "No section yet"} | {request.status}</p>
+                          </div>
+                          <button className="button button-primary" type="button" onClick={() => handleApproveRequest(request.inviteCode)}>
+                            Approve
+                          </button>
+                        </article>
+                      ))
+                    ) : (
+                      <article className="panel">
+                        <h3>No pending requests</h3>
+                        <p>New requests will appear here after someone uses the ensemble code.</p>
+                      </article>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {isDirectorMode && directorView !== "home" && selectedDirectorEnsemble && directorView === "sections" ? (
+              <>
+                <form className="panel form-panel" onSubmit={handleSectionSubmit}>
+                  <div className="section-header">
+                    <div>
+                      <h3>Add section</h3>
+                      <p>Create instrument groups inside the selected ensemble.</p>
+                    </div>
+                    <div className="form-actions">
+                      <button className="button button-secondary" type="button" onClick={() => openDirectorEnsemble(selectedDirectorEnsemble.ensembleId)}>
+                        Back to ensemble
+                      </button>
+                      <button className="button button-secondary" type="button" onClick={openDirectorHome}>
+                        Home
+                      </button>
+                    </div>
+                  </div>
+                  <div className="form-grid">
+                    <label className="field">
+                      <span>Ensemble</span>
+                      <select value={structureEnsembleId} onChange={(event) => setStructureEnsembleId(event.target.value)}>
+                        <option value="">Choose ensemble</option>
+                        {displayedEnsembles.map((ensemble) => (
+                          <option key={ensemble.ensembleId} value={ensemble.ensembleId}>{ensemble.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Section name</span>
+                      <input value={sectionName} onChange={(event) => setSectionName(event.target.value)} placeholder="Brass" />
+                    </label>
+                  </div>
+                  <label className="field">
+                    <span>Description</span>
+                    <textarea value={sectionDescription} onChange={(event) => setSectionDescription(event.target.value)} rows={3} />
+                  </label>
+                  <div className="form-actions">
+                    <button className="button button-primary" type="submit" disabled={formBusy}>Save section</button>
+                  </div>
+                </form>
+
+                <div className="ensemble-list">
+                  {selectedDirectorEnsemble
+                    ? visibleSections
+                        .filter((section) => section.ensembleId === selectedDirectorEnsemble.ensembleId)
+                        .map((section) => (
+                          <article className="ensemble-row panel" key={section.sectionId}>
+                            <div>
+                              <p className="ensemble-role">Section ID: {section.sectionId}</p>
+                              <h3>{section.name}</h3>
+                              <p className="ensemble-status">{section.description || "No description yet."}</p>
+                            </div>
+                            <div className="form-actions">
+                              <button className="button button-primary" type="button" onClick={() => openDirectorSection(section.sectionId, section.ensembleId)}>
+                                Open section
+                              </button>
+                            </div>
+                          </article>
+                        ))
+                    : null}
+                </div>
+              </>
+            ) : null}
+
+            {isDirectorMode && directorView !== "home" && selectedDirectorEnsemble && directorView === "section" && selectedDirectorSection ? (
+              <>
+                <div className="section-header">
+                  <div>
+                    <h3>{selectedDirectorSection.name}</h3>
+                    <p>{selectedDirectorSection.description || "No description yet."}</p>
+                  </div>
+                  <div className="form-actions">
+                    <button className="button button-secondary" type="button" onClick={() => openDirectorEnsemble(selectedDirectorSection.ensembleId)}>Back to ensemble</button>
+                    <button className="button button-secondary" type="button" onClick={openDirectorHome}>Home</button>
+                  </div>
+                </div>
+
+                <div className="card-grid dashboard-grid">
+                  <article className="panel">
+                    <h3>Assignments in this section</h3>
+                    <p>{selectedSectionAssignments.length} assignments</p>
+                  </article>
+                  <article className="panel">
+                    <h3>Videos in this section</h3>
+                    <p>{selectedSectionSubmissions.length} submissions</p>
+                  </article>
+                </div>
+
+                <div className="ensemble-list">
+                  {selectedSectionAssignments.length ? selectedSectionAssignments.map((assignment) => (
+                    <article className="ensemble-row panel" key={assignment.assignmentId}>
+                      <div>
+                        <p className="ensemble-role">Assignment ID: {assignment.assignmentId}</p>
+                        <h3>{assignment.title}</h3>
+                        <p className="ensemble-status">{assignment.description || "No description yet."}</p>
+                      </div>
+                      <button className="button button-primary" type="button" onClick={() => openDirectorAssignment(assignment.assignmentId, assignment.ensembleId)}>
+                        Open assignment
+                      </button>
+                    </article>
+                  )) : (
+                    <article className="panel"><h3>No section assignments yet</h3><p>Add a section-scoped assignment from the assignments page.</p></article>
+                  )}
+                </div>
+
+                <div className="ensemble-list">
+                  {selectedSectionSubmissions.length ? selectedSectionSubmissions.map((submission) => (
+                    <article className="ensemble-row panel" key={submission.submissionId}>
+                      <div>
+                        <p className="ensemble-role">Submission: {submission.submissionId}</p>
+                        <h3>{submission.reviewStatus}</h3>
+                        <p className="ensemble-status">{submission.notes || "No notes yet."}</p>
+                      </div>
+                      <button className="button button-secondary" type="button" onClick={() => {
+                        setCommentSubmissionId(submission.submissionId);
+                        setReviewSubmissionId(submission.submissionId);
+                        setDirectorView("assignment");
+                      }}>
+                        View comments
+                      </button>
+                    </article>
+                  )) : (
+                    <article className="panel"><h3>No submissions yet</h3><p>Section members will appear here after they submit videos.</p></article>
+                  )}
+                </div>
+              </>
+            ) : null}
+
+            {isDirectorMode && directorView !== "home" && selectedDirectorEnsemble && directorView === "assignments" ? (
+              <>
+                <form className="panel form-panel" onSubmit={handleAssignmentSubmit}>
+                  <div className="section-header">
+                    <div>
+                      <h3>Add assignment</h3>
+                      <p>Create ensemble-wide or section-specific assignments.</p>
+                    </div>
+                    <div className="form-actions">
+                      <button className="button button-secondary" type="button" onClick={() => openDirectorEnsemble(selectedDirectorEnsemble.ensembleId)}>Back to ensemble</button>
+                      <button className="button button-secondary" type="button" onClick={openDirectorHome}>Home</button>
+                    </div>
+                  </div>
+                  <div className="form-grid">
+                    <label className="field">
+                      <span>Ensemble</span>
+                      <select value={assignmentEnsembleId} onChange={(event) => setAssignmentEnsembleId(event.target.value)}>
+                        <option value="">Choose ensemble</option>
+                        {displayedEnsembles.map((ensemble) => (
+                          <option key={ensemble.ensembleId} value={ensemble.ensembleId}>{ensemble.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Target section</span>
+                      <select value={assignmentSectionId} onChange={(event) => setAssignmentSectionId(event.target.value)}>
+                        <option value="">Whole ensemble</option>
+                        {visibleSections
+                          .filter((section) => section.ensembleId === assignmentEnsembleId)
+                          .map((section) => (
+                            <option key={section.sectionId} value={section.sectionId}>{section.name}</option>
+                          ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Due date</span>
+                      <input type="date" value={assignmentDueDate} onChange={(event) => setAssignmentDueDate(event.target.value)} />
+                    </label>
+                  </div>
+                  <label className="field">
+                    <span>Title</span>
+                    <input value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} placeholder="Rehearse measure 12-28" />
+                  </label>
+                  <label className="field">
+                    <span>Description</span>
+                    <textarea value={assignmentDescription} onChange={(event) => setAssignmentDescription(event.target.value)} rows={3} />
+                  </label>
+                  <div className="form-actions">
+                    <button className="button button-primary" type="submit" disabled={formBusy}>Save assignment</button>
+                  </div>
+                </form>
+
+                <div className="ensemble-list">
+                  {visibleAssignments.filter((assignment) => assignment.ensembleId === assignmentEnsembleId).length
+                    ? visibleAssignments
+                        .filter((assignment) => assignment.ensembleId === assignmentEnsembleId)
+                        .map((assignment) => (
+                          <article className="ensemble-row panel" key={assignment.assignmentId}>
+                            <div>
+                              <p className="ensemble-role">{assignment.sectionId ? `Section: ${assignment.sectionId}` : "Whole ensemble"}</p>
+                              <h3>{assignment.title}</h3>
+                              <p className="ensemble-status">{assignment.description || "No description yet."}</p>
+                            </div>
+                            <button className="button button-primary" type="button" onClick={() => openDirectorAssignment(assignment.assignmentId, assignment.ensembleId)}>
+                              Open assignment
+                            </button>
+                          </article>
+                        ))
+                    : (
+                      <article className="panel"><h3>No assignments yet</h3><p>Create the first assignment for this ensemble.</p></article>
+                    )}
+                </div>
+              </>
+            ) : null}
+
+            {isDirectorMode && directorView !== "home" && selectedDirectorEnsemble && directorView === "assignment" && selectedDirectorAssignment ? (
+              <>
+                <div className="section-header">
+                  <div>
+                    <h3>{selectedDirectorAssignment.title}</h3>
+                    <p>{selectedDirectorAssignment.description || "No description yet."}</p>
+                    <p className="muted-copy">Due {selectedDirectorAssignment.dueDate || "unspecified"}</p>
+                  </div>
+                  <div className="form-actions">
+                    <button className="button button-secondary" type="button" onClick={() => openDirectorAssignments(selectedDirectorAssignment.ensembleId)}>Back to assignments</button>
+                    <button className="button button-secondary" type="button" onClick={openDirectorHome}>Home</button>
+                  </div>
+                </div>
+
+                <div className="ensemble-list">
+                  {selectedAssignmentSubmissions.length ? selectedAssignmentSubmissions.map((submission) => (
+                    <article className="ensemble-row panel" key={submission.submissionId}>
+                      <div>
+                        <p className="ensemble-role">Submission: {submission.submissionId}</p>
+                        <h3>{submission.reviewStatus}</h3>
+                        <p className="ensemble-status">{submission.notes || "No notes yet."}</p>
+                        <p className="ensemble-role">Section: {submission.sectionId || "unassigned"}</p>
+                      </div>
+                      <div className="form-actions">
+                        <button className="button button-secondary" type="button" onClick={() => {
+                          setCommentSubmissionId(submission.submissionId);
+                          setReviewSubmissionId(submission.submissionId);
+                        }}>
+                          Comments
+                        </button>
+                      </div>
+                    </article>
+                  )) : (
+                    <article className="panel"><h3>No submissions yet</h3><p>Member videos for this assignment will appear here.</p></article>
+                  )}
+                </div>
+
+                <div className="auth-grid">
+                  <form className="panel form-panel" onSubmit={handleCommentSubmit}>
+                    <h3>Add comment</h3>
+                    <label className="field">
+                      <span>Submission</span>
+                      <select value={commentSubmissionId} onChange={(event) => setCommentSubmissionId(event.target.value)}>
+                        <option value="">Choose submission</option>
+                        {selectedAssignmentSubmissions.map((submission) => (
+                          <option key={submission.submissionId} value={submission.submissionId}>{submission.submissionId}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Comment</span>
+                      <textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="Leave a note with text or emojis" rows={4} />
+                    </label>
+                    <div className="form-actions">
+                      <button className="button button-primary" type="submit" disabled={formBusy}>Save comment</button>
+                    </div>
+                  </form>
+
+                  <form className="panel form-panel" onSubmit={handleReviewSubmit}>
+                    <h3>Review</h3>
+                    <label className="field">
+                      <span>Submission</span>
+                      <select value={reviewSubmissionId} onChange={(event) => setReviewSubmissionId(event.target.value)}>
+                        <option value="">Choose submission</option>
+                        {selectedAssignmentSubmissions.map((submission) => (
+                          <option key={submission.submissionId} value={submission.submissionId}>{submission.submissionId}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Status</span>
+                      <select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}>
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="needs_work">Needs work</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Feedback</span>
+                      <textarea value={reviewFeedback} onChange={(event) => setReviewFeedback(event.target.value)} rows={4} />
+                    </label>
+                    <div className="form-actions">
+                      <button className="button button-primary" type="submit" disabled={formBusy}>Save review</button>
+                    </div>
+                  </form>
+                </div>
+
+                <div className="ensemble-list">
+                  {visibleComments.filter((comment) => commentSubmissionId && comment.submissionId === commentSubmissionId).length ? (
+                    visibleComments
+                      .filter((comment) => commentSubmissionId && comment.submissionId === commentSubmissionId)
+                      .map((comment) => (
+                        <article className="ensemble-row panel" key={comment.commentId}>
+                          <div>
+                            <p className="ensemble-role">Author: {comment.authorId}</p>
+                            <h3>{comment.body}</h3>
+                          </div>
+                          <p className="ensemble-role">{comment.createdAt ? new Date(comment.createdAt).toLocaleString() : "Unknown"}</p>
+                        </article>
+                      ))
+                  ) : (
+                    <article className="panel">
+                      <h3>No comments yet</h3>
+                      <p>Select a submission to see the thread.</p>
+                    </article>
+                  )}
+                </div>
+              </>
+            ) : null}
+
+            {isDirectorMode && directorView !== "home" && selectedDirectorEnsemble && directorView === "announcements" ? (
+              <>
+                <form className="panel form-panel" onSubmit={handleAnnouncementSubmit}>
+                  <div className="section-header">
+                    <div>
+                      <h3>Post announcement</h3>
+                      <p>Send a message to everyone in the ensemble inbox.</p>
+                    </div>
+                    <div className="form-actions">
+                      <button className="button button-secondary" type="button" onClick={() => openDirectorEnsemble(selectedDirectorEnsemble.ensembleId)}>Back to ensemble</button>
+                      <button className="button button-secondary" type="button" onClick={openDirectorHome}>Home</button>
+                    </div>
+                  </div>
+                  <label className="field">
+                    <span>Announcement</span>
+                    <textarea value={announcementBody} onChange={(event) => setAnnouncementBody(event.target.value)} placeholder="Concert reminder, rehearsal change, or section note" rows={4} />
+                  </label>
+                  <div className="form-actions">
+                    <button className="button button-primary" type="submit" disabled={formBusy}>Post announcement</button>
+                  </div>
+                </form>
+
+                <div className="ensemble-list">
+                  {directorAnnouncements.length ? (
+                    directorAnnouncements.map((notification) => (
+                      <article className="ensemble-row panel" key={notification.notificationId}>
+                        <div>
+                          <p className="ensemble-role">{notification.entityType}</p>
+                          <h3>{notification.message}</h3>
+                          <p className="ensemble-status">{notification.isRead ? "Read" : "Unread"}</p>
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <article className="panel">
+                      <h3>No announcements yet</h3>
+                      <p>Post the first update to notify the ensemble.</p>
+                    </article>
+                  )}
+                </div>
+              </>
+            ) : null}
+          </section>
+
+          {toastMessage ? (
+            <div className={`toast toast-${toastKind}`} role="status" aria-live="polite">
+              {toastMessage}
+            </div>
+          ) : null}
+        </div>
+
+        {profileModalOpen ? (
+          <div
+            className="modal-backdrop"
+            role="presentation"
+            onClick={() => setProfileModalOpen(false)}
+          >
+            <form
+              className="panel form-panel modal-panel"
+              onClick={(event) => event.stopPropagation()}
+              onSubmit={handleProfileSubmit}
+            >
+              <div className="section-header">
+                <div>
+                  <h2>Edit profile</h2>
+                  <p>Update your username, name, and profile photo.</p>
+                </div>
+                <button className="button button-secondary" type="button" onClick={() => setProfileModalOpen(false)}>
+                  Close
+                </button>
+              </div>
+
+              <div className="profile-hero">
+                <div className="avatar-circle avatar-circle-large" aria-hidden="true">
+                  {avatarInitials}
+                </div>
+                <div>
+                  <h3>{signedInName}</h3>
+                  <p className="muted-copy">{signedInEmail || "Your email comes from sign-in."}</p>
+                </div>
+              </div>
+
+              <label className="field">
+                <span>Username</span>
+                <input
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="unique-handle"
+                />
+              </label>
+
+              <label className="field">
+                <span>Display name</span>
+                <input
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                  placeholder="Musician name"
+                />
+              </label>
+
+              <label className="field">
+                <span>Profile photo</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setProfilePhotoFile(event.target.files?.[0] ?? null)}
+                />
+              </label>
+
+              <p className="muted-copy">Your email stays tied to your sign-in account.</p>
+
+              <div className="form-actions">
+                <button className="button button-primary" type="submit" disabled={formBusy}>
+                  Save profile
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : null}
+      </main>
+    );
+  }
+
   if (!showWorkspace) {
     return (
       <main className="auth-shell">
@@ -1160,11 +2363,6 @@ function App() {
             <p className="muted-copy">Password resets go through Cognito email recovery.</p>
           </div>
 
-          <div className="panel form-panel">
-            <h3>Status</h3>
-            <p>{authMessage}</p>
-            <p className="muted-copy">{apiState}</p>
-          </div>
         </section>
       </main>
     );
@@ -1175,18 +2373,12 @@ function App() {
       <aside className="sidebar panel">
         <div>
           <p className="eyebrow">EnsembleFlow</p>
-          <h2>{workspaceModeLabel}</h2>
+          <h2>{isDirectorMode ? "Director dashboard" : "Member dashboard"}</h2>
           <p className="muted-copy">
             {isDirectorMode
               ? "Manage ensembles and assignments from a focused director view."
               : "Track your ensembles, assignments, submissions, and section updates."}
           </p>
-        </div>
-
-        <div className="sidebar-status">
-          <span className="status-chip">{apiState}</span>
-          <span className="status-chip status-chip-muted">{authMessage}</span>
-          <span className="status-chip">{isDirectorMode ? "Director" : "Member"}</span>
         </div>
 
         <div className="sidebar-actions">
@@ -1215,37 +2407,30 @@ function App() {
           ))}
         </nav>
 
-        <div className="sidebar-footer">
-          <p className="muted-copy">Current status</p>
-          <p className="sidebar-footer-value">{connectionLabel}</p>
-        </div>
       </aside>
 
       <div className="workspace">
         <section className="hero" id="overview">
           <div className="hero-topline">
             <p className="eyebrow">EnsembleFlow</p>
-            <div className="topline-statuses">
-              <span className="status-chip">{apiState}</span>
-              <span className="status-chip status-chip-muted">{authMessage}</span>
-              <span className="status-chip">{workspaceModeLabel}</span>
-            </div>
           </div>
           <div className="hero-grid hero-grid-main">
-          <div>
-            <h1>Keep ensembles organized and accountable.</h1>
-            <p className="lede">
-              EnsembleFlow brings profiles, ensembles, sections, assignments, and submissions into one workspace for music teams.
-            </p>
-          </div>
+            <div>
+              <h1>Keep ensembles organized and accountable.</h1>
+              <p className="lede">
+                {isDirectorMode
+                  ? "Use the director portal to manage ensembles, members, and assignments."
+                  : "Use the member portal to see your ensembles, assignments, and practice submissions."}
+              </p>
+            </div>
 
             <article className="panel panel-accent">
-              <h2>How it works</h2>
-              <ol className="phase-list">
-                {rolloutSteps.map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
+              <h2>Current focus</h2>
+              <p>
+                {isDirectorMode
+                  ? "Director access is reserved for approved email addresses."
+                  : "Members only see the ensembles and sections they belong to."}
+              </p>
             </article>
           </div>
 
@@ -1263,7 +2448,7 @@ function App() {
                 {signedInUsername ? <p className="muted-copy">@{signedInUsername}</p> : null}
               </div>
               <div className="account-actions">
-                <button className="button button-primary" type="button" onClick={() => setProfileModalOpen(true)}>
+                <button className="button button-primary" type="button" onClick={openProfileEditor}>
                   Edit profile photo
                 </button>
                 <button className="button button-secondary" type="button" onClick={handleSignOut}>
@@ -1295,69 +2480,6 @@ function App() {
             ) : null}
           </div>
         </section>
-
-        <section className="section" id="overview-details">
-          <div className="section-header">
-            <div>
-              <h2>{workspaceModeLabel}</h2>
-              <p>
-                {isDirectorMode
-                  ? "Manage ensembles, sections, memberships, assignments, and feedback."
-                  : "Focus on your ensembles, your assignments, your submissions, and your section feed."}
-              </p>
-            </div>
-            <p className="section-meta">{connectionLabel}</p>
-          </div>
-
-          <div className="card-grid dashboard-grid">
-            {dashboardCards.map((item) => (
-              <article className="panel" key={item.title}>
-                <h3>{item.title}</h3>
-                <p>{item.body}</p>
-              </article>
-            ))}
-          </div>
-
-          <article className="panel panel-accent">
-            <h3>What you can do here</h3>
-            <p>
-              {isDirectorMode
-                ? "Create assignments, approve join requests, place people in sections, and leave feedback."
-                : "Open your ensembles, submit practice videos, and reply to feedback inside your section."}
-            </p>
-            <p className="muted-copy">Notifications waiting: {unreadNotificationCount}</p>
-          </article>
-        </section>
-
-      <section className="section" id="profile">
-        <div className="section-header">
-          <div>
-            <h2>My profile</h2>
-            <p>Update your username, display name, and profile photo.</p>
-          </div>
-          <p className="section-meta">
-            Current profile: {profile.username ? `@${profile.username}` : "Not loaded yet"}
-          </p>
-        </div>
-
-        <article className="panel">
-          <div className="profile-hero">
-            <div className="avatar-circle avatar-circle-large" aria-hidden="true">
-              {avatarInitials}
-            </div>
-            <div>
-              <h3>{signedInName}</h3>
-              <p className="muted-copy">{signedInEmail || "Your email comes from sign-in."}</p>
-              {signedInUsername ? <p className="muted-copy">@{signedInUsername}</p> : null}
-            </div>
-          </div>
-          <div className="form-actions">
-            <button className="button button-primary" type="button" onClick={() => setProfileModalOpen(true)}>
-              Edit profile photo
-            </button>
-          </div>
-        </article>
-      </section>
 
       <section className="section" id="ensembles">
         <div className="section-header">
@@ -1429,6 +2551,13 @@ function App() {
               <div>
                 <p className="ensemble-role">Owner: {ensemble.ownerId}</p>
                 <h3>{ensemble.name}</h3>
+                {ensembleLogoUrls[ensemble.ensembleId] ? (
+                  <img
+                    className="ensemble-logo-preview"
+                    src={ensembleLogoUrls[ensemble.ensembleId]}
+                    alt={`${ensemble.name} logo`}
+                  />
+                ) : null}
                 <p className="ensemble-status">{ensemble.description || "No description yet."}</p>
                 <p className="ensemble-role">
                   Sections:{" "}
@@ -1440,12 +2569,352 @@ function App() {
                     : "None yet"}
                 </p>
               </div>
-              <p className="ensemble-role">{ensemble.logoKey ? "Logo uploaded" : "No logo yet"}</p>
+              <div className="form-actions">
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={() =>
+                    isDirectorMode
+                      ? openDirectorEnsemble(ensemble.ensembleId)
+                      : openMemberEnsemble(ensemble.ensembleId)
+                  }
+                >
+                  Open ensemble
+                </button>
+              </div>
             </article>
           ))}
         </div>
+
+        {!isDirectorMode && selectedDirectorEnsemble ? (
+          <article className="panel panel-accent">
+            <div className="section-header">
+              <div>
+                <h3>{selectedDirectorEnsemble.name}</h3>
+                <p className="muted-copy">Open one part of this ensemble at a time.</p>
+              </div>
+              <button className="button button-secondary" type="button" onClick={openMemberHome}>
+                Back to ensembles
+              </button>
+            </div>
+
+            {memberView === "ensemble" ? (
+              <div className="card-grid dashboard-grid">
+                <article className="panel">
+                  <h3>Announcements</h3>
+                  <p className="muted-copy">
+                    {latestMemberAnnouncement ? latestMemberAnnouncement.message : "No announcements yet."}
+                  </p>
+                  <button className="button button-secondary" type="button" onClick={openMemberAnnouncements}>
+                    Open announcements
+                  </button>
+                </article>
+
+                <article className="panel">
+                  <h3>Your section</h3>
+                  <p className="muted-copy">
+                    {selectedMemberSection
+                      ? selectedMemberSection.sectionName ||
+                        visibleSections.find((section) => section.sectionId === selectedMemberSection.sectionId)?.name ||
+                        "Unassigned"
+                      : "Your director will place you in a section after approval."}
+                  </p>
+                  <button className="button button-secondary" type="button" onClick={openMemberSection}>
+                    Open section
+                  </button>
+                </article>
+
+                <article className="panel">
+                  <h3>Messages</h3>
+                  <p className="muted-copy">Message people in your section or start a group chat.</p>
+                  <button className="button button-secondary" type="button" onClick={openMemberMessages}>
+                    Open messages
+                  </button>
+                </article>
+
+                <article className="panel">
+                  <h3>Assignments</h3>
+                  <p className="muted-copy">See what is due and upload your practice video.</p>
+                  <button className="button button-secondary" type="button" onClick={openMemberAssignments}>
+                    Open assignments
+                  </button>
+                </article>
+              </div>
+            ) : null}
+
+            {memberView === "announcements" ? (
+              <div className="ensemble-list">
+                {directorAnnouncements.length ? (
+                  directorAnnouncements.map((notification) => (
+                    <article className="ensemble-row panel" key={notification.notificationId}>
+                      <div>
+                        <p className="ensemble-role">{notification.entityType}</p>
+                        <h3>{notification.message}</h3>
+                      </div>
+                      <p className="ensemble-role">{notification.isRead ? "Read" : "Unread"}</p>
+                    </article>
+                  ))
+                ) : (
+                  <article className="panel">
+                    <h3>No announcements yet</h3>
+                    <p>Open the ensemble to see updates from the director.</p>
+                  </article>
+                )}
+              </div>
+            ) : null}
+
+            {memberView === "section" ? (
+              <div className="card-grid dashboard-grid">
+                <article className="panel">
+                  <div className="section-header">
+                    <div>
+                      <h3>Your section</h3>
+                      <p className="muted-copy">See who is in your section and who you can message.</p>
+                    </div>
+                    <button className="button button-secondary" type="button" onClick={() => setMemberView("ensemble")}>
+                      Back
+                    </button>
+                  </div>
+                  {currentMemberSectionIds.length > 1 ? (
+                    <label className="field">
+                      <span>Choose section</span>
+                      <select
+                        value={selectedMemberSectionId}
+                        onChange={(event) => setSelectedMemberSectionId(event.target.value)}
+                      >
+                        {currentMemberSectionIds.map((sectionId) => {
+                          const section = visibleSections.find((item) => item.sectionId === sectionId);
+                          return (
+                            <option key={sectionId} value={sectionId}>
+                              {section?.name || sectionId}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+                  ) : null}
+                  <p className="muted-copy">
+                    {selectedMemberSection
+                      ? selectedMemberSection.sectionName ||
+                        visibleSections.find((section) => section.sectionId === selectedMemberSection.sectionId)?.name ||
+                        "Unassigned"
+                      : "Your director will place you in a section after approval."}
+                  </p>
+                  <div className="ensemble-list">
+                    {currentSectionRoster.length ? (
+                      currentSectionRoster.map((membership) => (
+                        <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
+                          <div>
+                            <p className="ensemble-role">Member: {membership.userId}</p>
+                            <h3>{membership.sectionName || "Section member"}</h3>
+                            <p className="ensemble-status">Role: {membership.role}</p>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <article className="panel">
+                        <h3>No section members yet</h3>
+                        <p>Other musicians in your section will appear here.</p>
+                      </article>
+                    )}
+                  </div>
+                </article>
+              </div>
+            ) : null}
+
+            {memberView === "messages" ? (
+              <div className="card-grid dashboard-grid">
+                <form className="panel form-panel" onSubmit={handleConversationSubmit}>
+                  <div className="section-header">
+                    <div>
+                      <h3>Messages</h3>
+                      <p className="muted-copy">Start a conversation with one person or a group in your section.</p>
+                    </div>
+                    <button className="button button-secondary" type="button" onClick={() => setMemberView("ensemble")}>
+                      Back
+                    </button>
+                  </div>
+                  <label className="field">
+                    <span>Conversation title</span>
+                    <input
+                      value={sectionMessageTitle}
+                      onChange={(event) => setSectionMessageTitle(event.target.value)}
+                      placeholder="Brass check-in"
+                    />
+                  </label>
+                  <div className="field">
+                    <span>Select members</span>
+                    <div className="checkbox-list">
+                      {currentSectionRoster.length ? (
+                        currentSectionRoster.map((membership) => (
+                          <label className="checkbox-row" key={`${membership.userId}-${membership.ensembleId}`}>
+                            <input
+                              type="checkbox"
+                              checked={conversationParticipantIds.includes(membership.userId)}
+                              onChange={(event) => {
+                                setConversationParticipantIds((current) =>
+                                  event.target.checked
+                                    ? [...current, membership.userId]
+                                    : current.filter((item) => item !== membership.userId),
+                                );
+                              }}
+                            />
+                            <span>{membership.userId}</span>
+                          </label>
+                        ))
+                      ) : (
+                        <p className="muted-copy">No additional section members yet.</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="form-actions">
+                    <button className="button button-primary" type="submit" disabled={formBusy}>
+                      Start group
+                    </button>
+                  </div>
+                  <div className="ensemble-list">
+                    {remoteConversations.length ? (
+                      remoteConversations.map((conversation) => (
+                        <article className="ensemble-row panel" key={conversation.conversationId}>
+                          <div>
+                            <p className="ensemble-role">{conversation.sectionId}</p>
+                            <h3>{conversation.title}</h3>
+                            <p className="ensemble-status">
+                              {conversation.participantIds.length} people in thread
+                            </p>
+                          </div>
+                          <button
+                            className="button button-secondary"
+                            type="button"
+                            onClick={() => setSectionMessageConversationId(conversation.conversationId)}
+                          >
+                            Open
+                          </button>
+                        </article>
+                      ))
+                    ) : (
+                      <article className="panel">
+                        <h3>No conversations yet</h3>
+                        <p>Start one for a subgroup or the full section.</p>
+                      </article>
+                    )}
+                  </div>
+                  <label className="field">
+                    <span>Message</span>
+                    <textarea
+                      value={sectionMessageBody}
+                      onChange={(event) => setSectionMessageBody(event.target.value)}
+                      placeholder="Say something to the group"
+                      rows={4}
+                    />
+                  </label>
+                  <div className="form-actions">
+                    <button className="button button-primary" type="submit" disabled={formBusy || !sectionMessageConversationId}>
+                      Send message
+                    </button>
+                  </div>
+                  <div className="ensemble-list">
+                    {remoteConversationMessages.length ? (
+                      remoteConversationMessages.map((message) => (
+                        <article className="ensemble-row panel" key={message.messageId}>
+                          <div>
+                            <p className="ensemble-role">From: {message.senderId}</p>
+                            <h3>{message.body}</h3>
+                          </div>
+                          <p className="ensemble-role">
+                            {message.createdAt ? new Date(message.createdAt).toLocaleString() : "Unknown"}
+                          </p>
+                        </article>
+                      ))
+                    ) : (
+                      <article className="panel">
+                        <h3>No messages yet</h3>
+                        <p>Open or start a group to see the chat.</p>
+                      </article>
+                    )}
+                  </div>
+                </form>
+              </div>
+            ) : null}
+
+            {memberView === "assignments" ? (
+              <div className="card-grid dashboard-grid">
+                <article className="panel form-panel">
+                  <div className="section-header">
+                    <div>
+                      <h3>Assignments</h3>
+                      <p className="muted-copy">See what is due and upload your practice video.</p>
+                    </div>
+                    <button className="button button-secondary" type="button" onClick={() => setMemberView("ensemble")}>
+                      Back
+                    </button>
+                  </div>
+                  <div className="ensemble-list">
+                    {memberOutstandingAssignments.length ? (
+                      memberOutstandingAssignments.map((assignment) => (
+                        <article className="ensemble-row panel" key={assignment.assignmentId}>
+                          <div>
+                            <p className="ensemble-role">Due {assignment.dueDate || "unspecified"}</p>
+                            <h3>{assignment.title}</h3>
+                            <p className="ensemble-status">{assignment.description || "No description yet."}</p>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <article className="panel">
+                        <h3>Nothing due right now</h3>
+                        <p>Turn in any remaining tasks or wait for your director to post new ones.</p>
+                      </article>
+                    )}
+                  </div>
+
+                  <form className="panel form-panel" onSubmit={handleSubmissionSubmit}>
+                    <h3>Upload a practice video</h3>
+                    <label className="field">
+                      <span>Assignment</span>
+                      <select
+                        value={submissionAssignmentId}
+                        onChange={(event) => setSubmissionAssignmentId(event.target.value)}
+                      >
+                        <option value="">Choose assignment</option>
+                        {currentMemberAssignments.map((assignment) => (
+                          <option key={assignment.assignmentId} value={assignment.assignmentId}>
+                            {assignment.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Video</span>
+                      <input
+                        type="file"
+                        accept="video/*"
+                        onChange={(event) => setSubmissionFile(event.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Notes</span>
+                      <textarea
+                        value={submissionNotes}
+                        onChange={(event) => setSubmissionNotes(event.target.value)}
+                        placeholder="Anything your director should know?"
+                        rows={3}
+                      />
+                    </label>
+                    <div className="form-actions">
+                      <button className="button button-primary" type="submit" disabled={formBusy}>
+                        Save video
+                      </button>
+                    </div>
+                  </form>
+                </article>
+              </div>
+            ) : null}
+          </article>
+        ) : null}
       </section>
 
+      {isDirectorMode ? (
       <section className="section" id="structure">
         <div className="section-header">
           <div>
@@ -1664,7 +3133,9 @@ function App() {
           </div>
         ) : null}
       </section>
+      ) : null}
 
+      {isDirectorMode ? (
       <section className="section" id="assignments">
         <div className="section-header">
           <div>
@@ -1726,15 +3197,60 @@ function App() {
               </button>
             </div>
           </form>
+        ) : selectedDirectorEnsemble ? (
+          <form className="panel form-panel" onSubmit={handleSubmissionSubmit}>
+            <div className="section-header">
+              <div>
+                <h3>Upload a practice video</h3>
+                <p>Pick an assignment for the selected ensemble, then upload your video.</p>
+              </div>
+            </div>
+            <label className="field">
+              <span>Assignment</span>
+              <select
+                value={submissionAssignmentId}
+                onChange={(event) => setSubmissionAssignmentId(event.target.value)}
+              >
+                <option value="">Choose assignment</option>
+                {currentAssignments.map((assignment) => (
+                  <option key={assignment.assignmentId} value={assignment.assignmentId}>
+                    {assignment.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Video</span>
+              <input
+                type="file"
+                accept="video/*"
+                onChange={(event) => setSubmissionFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
+            <label className="field">
+              <span>Notes</span>
+              <textarea
+                value={submissionNotes}
+                onChange={(event) => setSubmissionNotes(event.target.value)}
+                placeholder="Anything your director should know?"
+                rows={3}
+              />
+            </label>
+            <div className="form-actions">
+              <button className="button button-primary" type="submit" disabled={formBusy}>
+                Save video
+              </button>
+            </div>
+          </form>
         ) : (
           <article className="panel">
             <h3>Assigned to you</h3>
-            <p className="muted-copy">Use your section feed to see what needs practice next.</p>
+            <p className="muted-copy">Open an ensemble to see the assignments and upload area.</p>
           </article>
         )}
 
         <div className="ensemble-list">
-          {visibleAssignments.map((assignment) => (
+          {currentAssignments.map((assignment) => (
             <article className="ensemble-row panel" key={assignment.assignmentId}>
               <div>
                 <p className="ensemble-role">Ensemble ID: {assignment.ensembleId}</p>
@@ -1746,326 +3262,6 @@ function App() {
           ))}
         </div>
       </section>
-
-      {!isDirectorMode ? (
-        <>
-      <section className="section" id="submissions">
-        <div className="section-header">
-          <div>
-            <h2>{isDirectorMode ? "Submissions" : "My submissions"}</h2>
-            <p>
-              {isDirectorMode
-                ? "Upload a practice video and browse the current ensemble feed."
-                : "Upload your practice video and browse the section feed."}
-            </p>
-          </div>
-        </div>
-
-        <form className="panel form-panel" onSubmit={handleSubmissionSubmit}>
-          <div className="form-grid">
-            <label className="field">
-              <span>Assignment</span>
-              <select
-                value={submissionAssignmentId}
-                onChange={(event) => setSubmissionAssignmentId(event.target.value)}
-              >
-                <option value="">Choose assignment</option>
-                {visibleAssignments.map((assignment) => (
-                  <option key={assignment.assignmentId} value={assignment.assignmentId}>
-                    {assignment.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Video file</span>
-              <input
-                type="file"
-                accept="video/*"
-                onChange={(event) => setSubmissionFile(event.target.files?.[0] ?? null)}
-              />
-            </label>
-          </div>
-          <label className="field">
-            <span>Notes</span>
-            <textarea
-              value={submissionNotes}
-              onChange={(event) => setSubmissionNotes(event.target.value)}
-              placeholder="What you practiced and anything to review"
-              rows={3}
-            />
-          </label>
-          <div className="form-actions">
-            <button className="button button-primary" type="submit" disabled={formBusy}>
-              Save submission
-            </button>
-          </div>
-        </form>
-
-        <div className="ensemble-list">
-          {visibleSubmissions.map((submission) => (
-            <article className="ensemble-row panel" key={submission.submissionId}>
-              <div>
-                <p className="ensemble-role">Assignment: {submission.assignmentId}</p>
-                <h3>{submission.reviewStatus}</h3>
-                <p className="ensemble-status">{submission.notes || "No notes yet."}</p>
-                <p className="ensemble-role">
-                  Section: {submission.sectionId || "unassigned"} | Ensemble: {submission.ensembleId || "unknown"}
-                </p>
-              </div>
-              <div>
-                <p className="ensemble-role">{submission.videoKey ? "Video uploaded" : "No video yet"}</p>
-                <button
-                  className="button button-secondary"
-                  type="button"
-                  onClick={() => {
-                    setCommentSubmissionId(submission.submissionId);
-                    setReviewSubmissionId(submission.submissionId);
-                  }}
-                >
-                  View thread
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="section" id="thread">
-        <div className="section-header">
-          <div>
-            <h2>Submission thread</h2>
-            <p>Read comments on the selected submission and reply back to the section.</p>
-          </div>
-          <p className="section-meta">
-            Selected: {selectedSubmission ? selectedSubmission.submissionId : "Choose a submission"}
-          </p>
-        </div>
-
-        <div className="auth-grid">
-          <article className="panel form-panel">
-            <h3>Thread preview</h3>
-            {selectedSubmission ? (
-              <>
-                <p className="muted-copy">Assignment: {selectedSubmission.assignmentId}</p>
-                <p className="muted-copy">Section: {selectedSubmission.sectionId || "unassigned"}</p>
-                <p>{selectedSubmission.notes || "No submission notes yet."}</p>
-              </>
-            ) : (
-              <p>No submission selected yet.</p>
-            )}
-          </article>
-
-          <form className="panel form-panel" onSubmit={handleCommentSubmit}>
-            <h3>Add comment</h3>
-            <label className="field">
-              <span>Submission</span>
-              <select
-                value={commentSubmissionId}
-                onChange={(event) => setCommentSubmissionId(event.target.value)}
-              >
-                <option value="">Choose submission</option>
-                {visibleSubmissions.map((submission) => (
-                  <option key={submission.submissionId} value={submission.submissionId}>
-                    {submission.submissionId}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Comment</span>
-              <textarea
-                value={commentBody}
-                onChange={(event) => setCommentBody(event.target.value)}
-                placeholder="Leave a note for the section"
-                rows={4}
-              />
-            </label>
-            <div className="form-actions">
-              <button className="button button-primary" type="submit" disabled={formBusy}>
-                Save comment
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <div className="ensemble-list">
-          {visibleComments.length ? (
-            visibleComments.map((comment) => (
-              <article className="ensemble-row panel" key={comment.commentId}>
-                <div>
-                  <p className="ensemble-role">Author: {comment.authorId}</p>
-                  <h3>{comment.body}</h3>
-                </div>
-                <p className="ensemble-role">
-                  {comment.createdAt ? new Date(comment.createdAt).toLocaleString() : "Unknown"}
-                </p>
-              </article>
-            ))
-          ) : (
-            <article className="panel">
-              <h3>No comments yet</h3>
-              <p>Choose a submission and start the thread.</p>
-            </article>
-          )}
-        </div>
-      </section>
-
-      <section className="section" id="notifications">
-        <div className="section-header">
-          <div>
-            <h2>Notifications</h2>
-            <p>New submissions, comments, and feedback show up here.</p>
-          </div>
-          <p className="section-meta">Unread: {unreadNotificationCount}</p>
-        </div>
-
-        <div className="ensemble-list">
-          {visibleNotifications.length ? (
-            visibleNotifications.map((notification) => (
-              <article className="ensemble-row panel" key={notification.notificationId}>
-                <div>
-                  <p className="ensemble-role">{notification.type}</p>
-                  <h3>{notification.message}</h3>
-                  <p className="ensemble-status">{notification.isRead ? "Read" : "Unread"}</p>
-                </div>
-                <div className="form-actions">
-                  <button
-                    className="button button-secondary"
-                    type="button"
-                    onClick={async () => {
-                      await markNotificationRead(accessToken, notification.notificationId);
-                      setRemoteNotifications((current) =>
-                        current.map((item) =>
-                          item.notificationId === notification.notificationId
-                            ? { ...item, isRead: true }
-                            : item,
-                        ),
-                      );
-                      setFormMessage("Notification marked as read.");
-                    }}
-                    disabled={notification.isRead}
-                  >
-                    Mark read
-                  </button>
-                </div>
-              </article>
-            ))
-          ) : (
-            <article className="panel">
-              <h3>No notifications yet</h3>
-              <p>New activity will appear here once the ensemble starts using the workflow.</p>
-            </article>
-          )}
-        </div>
-      </section>
-
-      <section className="section" id="feedback">
-        <div className="section-header">
-          <div>
-            <h2>Feedback</h2>
-            <p>
-              {isDirectorMode
-                ? "Review a submission and add feedback for the member."
-                : "Read feedback left on your submissions."}
-            </p>
-          </div>
-        </div>
-
-        {isDirectorMode ? (
-          <form className="panel form-panel" onSubmit={handleReviewSubmit}>
-            <div className="form-grid">
-              <label className="field">
-                <span>Submission</span>
-                <select
-                  value={reviewSubmissionId}
-                  onChange={(event) => setReviewSubmissionId(event.target.value)}
-                >
-                  <option value="">Choose submission</option>
-                  {visibleSubmissions.map((submission) => (
-                    <option key={submission.submissionId} value={submission.submissionId}>
-                      {submission.submissionId}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Status</span>
-                <select
-                  value={reviewStatus}
-                  onChange={(event) => setReviewStatus(event.target.value)}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="needs_work">Needs work</option>
-                </select>
-              </label>
-            </div>
-            <label className="field">
-              <span>Feedback</span>
-              <textarea
-                value={reviewFeedback}
-                onChange={(event) => setReviewFeedback(event.target.value)}
-                placeholder="Add comments for the member"
-                rows={3}
-              />
-            </label>
-            <div className="form-actions">
-              <button className="button button-primary" type="submit" disabled={formBusy}>
-                Save feedback
-              </button>
-            </div>
-          </form>
-        ) : (
-          <article className="panel">
-            <h3>Latest feedback</h3>
-            {selectedSubmission ? (
-              <>
-                <p className="muted-copy">Submission: {selectedSubmission.submissionId}</p>
-                <p>{selectedSubmission.feedback || "No feedback yet."}</p>
-                <p className="muted-copy">Status: {selectedSubmission.reviewStatus}</p>
-              </>
-            ) : (
-              <p>No submission selected yet.</p>
-            )}
-          </article>
-        )}
-      </section>
-
-      <section className="section" id="media">
-        <div className="section-header">
-          <div>
-            <h2>Media</h2>
-            <p>Practice videos and other files go through the app.</p>
-          </div>
-        </div>
-
-        <form className="panel form-panel" onSubmit={handleUploadSubmit}>
-          <div className="form-grid">
-            <label className="field">
-              <span>File</span>
-              <input
-                type="file"
-                onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
-              />
-            </label>
-            <label className="field">
-              <span>Ensemble ID</span>
-              <input
-                value={uploadEnsembleId}
-                onChange={(event) => setUploadEnsembleId(event.target.value)}
-                placeholder="Optional ensemble ID"
-              />
-            </label>
-          </div>
-          <div className="form-actions">
-            <button className="button button-primary" type="submit" disabled={formBusy}>
-              Upload file
-            </button>
-          </div>
-        </form>
-      </section>
-        </>
       ) : null}
 
       {profileModalOpen ? (
@@ -2132,21 +3328,16 @@ function App() {
 
             <p className="muted-copy">Your email stays tied to your sign-in account.</p>
 
+            {formMessage ? <p className="muted-copy">{formMessage}</p> : null}
+
             <div className="form-actions">
               <button className="button button-primary" type="submit" disabled={formBusy}>
-                Save profile
+                {formBusy ? "Saving..." : "Save profile"}
               </button>
             </div>
           </form>
         </div>
       ) : null}
-
-      <section className="section">
-        <div className="panel panel-accent">
-          <h2>Recent activity</h2>
-          <p>{formMessage || "Ready."}</p>
-        </div>
-      </section>
 
       {toastMessage ? (
         <div className={`toast toast-${toastKind}`} role="status" aria-live="polite">
