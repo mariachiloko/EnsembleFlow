@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 18: stale session handling and explicit director/member login.
+Phase 19: director roster management, member detail, and ensemble inbox.
 
 ## Project Standards
 
@@ -107,6 +107,11 @@ Phase 18: stale session handling and explicit director/member login.
 - Added local session expiration checks so old Cognito tokens are cleared instead of silently reused.
 - Updated director/member sign-in to clear the previous local session before starting Cognito login.
 - Added a forced login prompt for portal sign-in so Cognito does not silently reuse a different email account.
+- Moved section placement into the opened director ensemble screen so a director can assign approved members without leaving the ensemble context.
+- Filtered join requests to pending-only so already-handled requests do not keep showing an approve button.
+- Added director member-detail views with missing assignments, submissions, remove/block actions, and direct messaging.
+- Added a director-side inbox for conversations in the opened ensemble while keeping member conversations scoped to their assigned section.
+- Updated conversation loading so directors can load ensemble conversations and members still load only section conversations.
 
 ## What Still Needs To Happen
 
@@ -125,3 +130,5 @@ Phase 18: stale session handling and explicit director/member login.
 - Verify the opened director ensemble shows its existing join code after refresh.
 - Verify the director section roster and ensemble roster read cleanly in the browser.
 - Verify director sign-in after being away shows the intended email/account instead of reusing a stale member session.
+- Verify section placement from the opened director ensemble screen with a real approved member.
+- Verify direct member messages appear in both the director inbox and the member's section-scoped inbox.

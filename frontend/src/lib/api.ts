@@ -548,8 +548,10 @@ export async function createComment(token: string, payload: CommentPayload) {
   });
 }
 
-export async function listConversations(token: string, ensembleId: string, sectionId: string) {
-  const query = `?ensembleId=${encodeURIComponent(ensembleId)}&sectionId=${encodeURIComponent(sectionId)}`;
+export async function listConversations(token: string, ensembleId: string, sectionId?: string) {
+  const query = sectionId
+    ? `?ensembleId=${encodeURIComponent(ensembleId)}&sectionId=${encodeURIComponent(sectionId)}`
+    : `?ensembleId=${encodeURIComponent(ensembleId)}`;
   return request<{
     conversations: Array<{
       conversationId: string;

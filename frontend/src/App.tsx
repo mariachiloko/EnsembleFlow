@@ -277,6 +277,8 @@ function App() {
   const [sectionMessageTitle, setSectionMessageTitle] = useState("");
   const [sectionMessageBody, setSectionMessageBody] = useState("");
   const [selectedMemberSectionId, setSelectedMemberSectionId] = useState("");
+  const [selectedDirectorMemberId, setSelectedDirectorMemberId] = useState("");
+  const [directorMemberMessage, setDirectorMemberMessage] = useState("");
   const [conversationParticipantIds, setConversationParticipantIds] = useState<string[]>([]);
   const [announcementBody, setAnnouncementBody] = useState("");
   const [formMessage, setFormMessage] = useState("");
@@ -674,7 +676,7 @@ function App() {
       try {
         const response = await listJoinRequests(accessToken, structureEnsembleId);
         if (!cancelled) {
-          setRemoteJoinRequests(response.invitations);
+          setRemoteJoinRequests(response.invitations.filter((invitation) => invitation.status === "pending"));
         }
       } catch {
         if (!cancelled) {
@@ -707,7 +709,9 @@ function App() {
   const activeMemberships = visibleMemberships.filter(
     (membership) => membership.ensembleId === structureEnsembleId,
   );
-  const approvedMemberships = activeMemberships.filter((membership) => membership.status !== "blocked");
+  const approvedMemberships = activeMemberships.filter(
+    (membership) => membership.status !== "blocked" && membership.status !== "removed",
+  );
   const visibleAssignments = remoteAssignments;
   const visibleSubmissions = remoteSubmissions;
   const visibleComments = remoteComments;
@@ -742,6 +746,8 @@ function App() {
   const selectedDirectorSectionMemberships = selectedDirectorSection
     ? activeMemberships.filter((membership) => membership.sectionId === selectedDirectorSection.sectionId)
     : [];
+  const selectedDirectorMember =
+    activeMemberships.find((membership) => membership.userId === selectedDirectorMemberId) || null;
   const selectedDirectorAssignment =
     visibleAssignments.find((assignment) => assignment.assignmentId === selectedDirectorAssignmentId) || null;
   const selectedSectionAssignments = selectedDirectorSection
@@ -759,6 +765,26 @@ function App() {
         (submission) => submission.assignmentId === selectedDirectorAssignment.assignmentId,
       )
     : [];
+  const selectedDirectorMemberAssignments = selectedDirectorMember
+    ? visibleAssignments.filter(
+        (assignment) =>
+          assignment.ensembleId === selectedDirectorMember.ensembleId &&
+          (!assignment.sectionId || assignment.sectionId === selectedDirectorMember.sectionId),
+      )
+    : [];
+  const selectedDirectorMemberSubmissions = selectedDirectorMember
+    ? remoteSubmissions.filter(
+        (submission) =>
+          submission.ensembleId === selectedDirectorMember.ensembleId &&
+          submission.ownerId === selectedDirectorMember.userId,
+      )
+    : [];
+  const selectedDirectorMemberSubmittedAssignmentIds = new Set(
+    selectedDirectorMemberSubmissions.map((submission) => submission.assignmentId),
+  );
+  const selectedDirectorMemberMissingAssignments = selectedDirectorMemberAssignments.filter(
+    (assignment) => !selectedDirectorMemberSubmittedAssignmentIds.has(assignment.assignmentId),
+  );
   const isDirectorMode =
     portalMode === "director" && (isDirectorAccount || signedInEmailNormalized === localDirectorEmail);
   const selectedMemberAssignments = selectedDirectorEnsemble
@@ -824,12 +850,36 @@ function App() {
     let cancelled = false;
 
     async function loadConversations() {
-      if (!accessToken || isDirectorMode || !selectedDirectorEnsemble || !selectedMemberSection?.sectionId) {
+      if (!accessToken || !selectedDirectorEnsemble) {
         setRemoteConversations([]);
         return;
       }
 
       try {
+        if (isDirectorMode) {
+          const response = await listConversations(accessToken, selectedDirectorEnsemble.ensembleId);
+
+          if (cancelled) return;
+
+          setRemoteConversations(response.conversations);
+          if (
+            response.conversations.length &&
+            !response.conversations.some((conversation) => conversation.conversationId === sectionMessageConversationId)
+          ) {
+            setSectionMessageConversationId(response.conversations[0].conversationId);
+          }
+          if (!response.conversations.length) {
+            setSectionMessageConversationId("");
+            setRemoteConversationMessages([]);
+          }
+          return;
+        }
+
+        if (!selectedMemberSection?.sectionId) {
+          setRemoteConversations([]);
+          return;
+        }
+
         const response = await listConversations(
           accessToken,
           selectedDirectorEnsemble.ensembleId,
@@ -948,6 +998,7 @@ function App() {
     setStructureEnsembleId("");
     setSelectedDirectorSectionId("");
     setSelectedDirectorAssignmentId("");
+    setSelectedDirectorMemberId("");
     setAssignmentSectionId("");
   }
 
@@ -955,6 +1006,7 @@ function App() {
     setStructureEnsembleId(ensembleId);
     setAssignmentEnsembleId(ensembleId);
     setAssignmentSectionId("");
+    setSelectedDirectorMemberId("");
     setDirectorView("ensemble");
   }
 
@@ -1313,7 +1365,17 @@ function App() {
             ...payload,
           });
 
-      setRemoteMemberships((current) => [result.membership, ...current]);
+      setRemoteMemberships((current) => {
+        const withoutPreviousVersion = current.filter(
+          (membership) =>
+            !(
+              membership.userId === result.membership.userId &&
+              membership.ensembleId === result.membership.ensembleId
+            ),
+        );
+
+        return [result.membership, ...withoutPreviousVersion];
+      });
       setFormMessage(existingMembership ? "Member updated." : "Member added.");
       setMembershipUserId("");
       setMembershipRole("member");
@@ -1364,6 +1426,9 @@ function App() {
       setRemoteMemberships((current) =>
         current.filter((membership) => !(membership.userId === userId && membership.ensembleId === ensembleId)),
       );
+      if (selectedDirectorMemberId === userId) {
+        setSelectedDirectorMemberId("");
+      }
       setFormMessage("Member removed.");
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "Member removal failed.");
@@ -1636,6 +1701,52 @@ function App() {
     }
   }
 
+  async function handleDirectorMemberMessageSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedDirectorEnsemble || !selectedDirectorMember) {
+      setFormMessage("Choose a member before sending a message.");
+      return;
+    }
+
+    if (!selectedDirectorMember.sectionId) {
+      setFormMessage("Place this member in a section before starting a message.");
+      return;
+    }
+
+    if (!directorMemberMessage.trim()) {
+      setFormMessage("Enter a message first.");
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Sending message...");
+
+    try {
+      const result = await createConversation(accessToken, {
+        ensembleId: selectedDirectorEnsemble.ensembleId,
+        sectionId: selectedDirectorMember.sectionId,
+        title: `Message with ${selectedDirectorMember.userId}`,
+        participantIds: [selectedDirectorMember.userId],
+      });
+
+      const messageResult = await createMessage(accessToken, {
+        conversationId: result.conversation.conversationId,
+        body: directorMemberMessage.trim(),
+      });
+
+      setRemoteConversations((current) => [result.conversation, ...current]);
+      setRemoteConversationMessages((current) => [...current, messageResult.message]);
+      setSectionMessageConversationId(result.conversation.conversationId);
+      setDirectorMemberMessage("");
+      setFormMessage("Message sent.");
+      await reloadNotifications();
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Message send failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
   if (isDirectorMode) {
     return (
       <main className="app-shell">
@@ -1874,6 +1985,101 @@ function App() {
                   </article>
                 </div>
 
+                <div className="auth-grid">
+                  <form className="panel form-panel" onSubmit={handleMembershipSubmit}>
+                    <h3>Place member in section</h3>
+                    <p className="muted-copy">Approved ensemble members can be assigned to a section from here.</p>
+                    <div className="form-grid">
+                      <label className="field">
+                        <span>Member</span>
+                        <select value={membershipUserId} onChange={(event) => setMembershipUserId(event.target.value)}>
+                          <option value="">Choose member</option>
+                          {approvedMemberships.map((membership) => (
+                            <option key={`${membership.userId}-${membership.ensembleId}`} value={membership.userId}>
+                              {membership.userId} {membership.sectionName ? `(${membership.sectionName})` : "(unassigned)"}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Role</span>
+                        <select value={membershipRole} onChange={(event) => setMembershipRole(event.target.value)}>
+                          <option value="member">Member</option>
+                          <option value="leader">Leader</option>
+                          <option value="co_director">Co-director</option>
+                        </select>
+                      </label>
+                    </div>
+                    <label className="field">
+                      <span>Section</span>
+                      <select value={membershipSectionId} onChange={(event) => setMembershipSectionId(event.target.value)}>
+                        <option value="">No section yet</option>
+                        {activeSections.map((section) => (
+                          <option key={section.sectionId} value={section.sectionId}>
+                            {section.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="form-actions">
+                      <button className="button button-primary" type="submit" disabled={formBusy}>
+                        Save placement
+                      </button>
+                    </div>
+                  </form>
+
+                  <article className="panel">
+                    <h3>Section roster</h3>
+                    <p className="muted-copy">Choose a section to see the members placed there.</p>
+                    <label className="field">
+                      <span>Section</span>
+                      <select
+                        value={selectedDirectorSectionId}
+                        onChange={(event) => setSelectedDirectorSectionId(event.target.value)}
+                      >
+                        <option value="">Choose section</option>
+                        {activeSections.map((section) => (
+                          <option key={section.sectionId} value={section.sectionId}>
+                            {section.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="ensemble-list">
+                      {selectedDirectorSection ? (
+                        selectedDirectorSectionMemberships.length ? (
+                          selectedDirectorSectionMemberships.map((membership) => (
+                            <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
+                              <div>
+                                <p className="ensemble-role">Member: {membership.userId}</p>
+                                <h3>{membership.sectionName || selectedDirectorSection.name}</h3>
+                                <p className="ensemble-status">Role: {membership.role}</p>
+                              </div>
+                              <button
+                                className="button button-secondary"
+                                type="button"
+                                onClick={() => setSelectedDirectorMemberId(membership.userId)}
+                              >
+                                Open member
+                              </button>
+                            </article>
+                          ))
+                        ) : (
+                          <article className="panel">
+                            <h3>No members in this section yet</h3>
+                            <p>Use the placement form to add an approved member to this section.</p>
+                          </article>
+                        )
+                      ) : (
+                        <article className="panel">
+                          <h3>No section selected</h3>
+                          <p>Choose a section to view its roster.</p>
+                        </article>
+                      )}
+                    </div>
+                  </article>
+                </div>
+
                 <div className="ensemble-list">
                   {activeMemberships.length ? (
                     activeMemberships.map((membership) => (
@@ -1885,6 +2091,13 @@ function App() {
                           <p className="ensemble-role">Status: {membership.status || "active"}</p>
                         </div>
                         <div className="form-actions">
+                          <button
+                            className="button button-primary"
+                            type="button"
+                            onClick={() => setSelectedDirectorMemberId(membership.userId)}
+                          >
+                            Open member
+                          </button>
                           <button className="button button-secondary" type="button" onClick={() => handleRemoveMember(membership.userId, membership.ensembleId)}>
                             Remove
                           </button>
@@ -1899,10 +2112,216 @@ function App() {
                   ) : (
                     <article className="panel">
                       <h3>No members yet</h3>
-                      <p>Add people to the ensemble to start building sections.</p>
+                      <p>Approved members will appear here after they join with the ensemble code.</p>
                     </article>
                   )}
                 </div>
+
+                {selectedDirectorMember ? (
+                  <article className="panel form-panel">
+                    <div className="section-header">
+                      <div>
+                        <h3>Member details</h3>
+                        <p className="muted-copy">{selectedDirectorMember.userId}</p>
+                      </div>
+                      <div className="form-actions">
+                        <button
+                          className="button button-secondary"
+                          type="button"
+                          onClick={() => handleRemoveMember(selectedDirectorMember.userId, selectedDirectorMember.ensembleId)}
+                        >
+                          Remove
+                        </button>
+                        {selectedDirectorMember.status !== "blocked" ? (
+                          <button
+                            className="button button-secondary"
+                            type="button"
+                            onClick={() => handleBlockMember(selectedDirectorMember.userId, selectedDirectorMember.ensembleId)}
+                          >
+                            Block
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="card-grid dashboard-grid">
+                      <article className="panel">
+                        <h3>Section</h3>
+                        <p>{selectedDirectorMember.sectionName || "Unassigned"}</p>
+                        <p className="ensemble-role">Role: {selectedDirectorMember.role}</p>
+                      </article>
+                      <article className="panel">
+                        <h3>Missing assignments</h3>
+                        <p>{selectedDirectorMemberMissingAssignments.length} open</p>
+                      </article>
+                      <article className="panel">
+                        <h3>Submissions</h3>
+                        <p>{selectedDirectorMemberSubmissions.length} submitted</p>
+                      </article>
+                    </div>
+
+                    <div className="auth-grid">
+                      <article className="panel">
+                        <h3>Missing work</h3>
+                        <div className="ensemble-list">
+                          {selectedDirectorMemberMissingAssignments.length ? (
+                            selectedDirectorMemberMissingAssignments.map((assignment) => (
+                              <article className="ensemble-row panel" key={assignment.assignmentId}>
+                                <div>
+                                  <p className="ensemble-role">Due {assignment.dueDate || "unspecified"}</p>
+                                  <h3>{assignment.title}</h3>
+                                  <p className="ensemble-status">{assignment.description || "No description yet."}</p>
+                                </div>
+                              </article>
+                            ))
+                          ) : (
+                            <article className="panel">
+                              <h3>No missing assignments</h3>
+                              <p>This member has no open assignments in their current section.</p>
+                            </article>
+                          )}
+                        </div>
+                      </article>
+
+                      <article className="panel">
+                        <h3>Submissions</h3>
+                        <div className="ensemble-list">
+                          {selectedDirectorMemberSubmissions.length ? (
+                            selectedDirectorMemberSubmissions.map((submission) => (
+                              <article className="ensemble-row panel" key={submission.submissionId}>
+                                <div>
+                                  <p className="ensemble-role">Assignment: {submission.assignmentId}</p>
+                                  <h3>{submission.reviewStatus}</h3>
+                                  <p className="ensemble-status">{submission.notes || "No notes yet."}</p>
+                                </div>
+                                <button
+                                  className="button button-secondary"
+                                  type="button"
+                                  onClick={() => {
+                                    setCommentSubmissionId(submission.submissionId);
+                                    setReviewSubmissionId(submission.submissionId);
+                                    setSelectedDirectorAssignmentId(submission.assignmentId);
+                                    setDirectorView("assignment");
+                                  }}
+                                >
+                                  Open
+                                </button>
+                              </article>
+                            ))
+                          ) : (
+                            <article className="panel">
+                              <h3>No submissions yet</h3>
+                              <p>Submitted videos will appear here.</p>
+                            </article>
+                          )}
+                        </div>
+                      </article>
+                    </div>
+
+                    <form className="panel form-panel" onSubmit={handleDirectorMemberMessageSubmit}>
+                      <h3>Send direct message</h3>
+                      <p className="muted-copy">
+                        Messages use the member's assigned section so visibility stays scoped correctly.
+                      </p>
+                      <label className="field">
+                        <span>Message</span>
+                        <textarea
+                          value={directorMemberMessage}
+                          onChange={(event) => setDirectorMemberMessage(event.target.value)}
+                          placeholder="Write a message to this member"
+                          rows={4}
+                        />
+                      </label>
+                      <div className="form-actions">
+                        <button
+                          className="button button-primary"
+                          type="submit"
+                          disabled={formBusy || !selectedDirectorMember.sectionId}
+                        >
+                          Send message
+                        </button>
+                      </div>
+                    </form>
+                  </article>
+                ) : null}
+
+                <form className="panel form-panel" onSubmit={handleMessageSubmit}>
+                  <div className="section-header">
+                    <div>
+                      <h3>Inbox</h3>
+                      <p className="muted-copy">Direct and group conversations for this ensemble.</p>
+                    </div>
+                  </div>
+                  <div className="ensemble-list">
+                    {remoteConversations.length ? (
+                      remoteConversations.map((conversation) => (
+                        <article className="ensemble-row panel" key={conversation.conversationId}>
+                          <div>
+                            <p className="ensemble-role">
+                              {conversation.sectionId
+                                ? activeSections.find((section) => section.sectionId === conversation.sectionId)?.name ||
+                                  conversation.sectionId
+                                : "Ensemble"}
+                            </p>
+                            <h3>{conversation.title}</h3>
+                            <p className="ensemble-status">{conversation.participantIds.length} participants</p>
+                          </div>
+                          <button
+                            className="button button-secondary"
+                            type="button"
+                            onClick={() => setSectionMessageConversationId(conversation.conversationId)}
+                          >
+                            Open
+                          </button>
+                        </article>
+                      ))
+                    ) : (
+                      <article className="panel">
+                        <h3>No messages yet</h3>
+                        <p>Direct messages and section conversations will appear here.</p>
+                      </article>
+                    )}
+                  </div>
+
+                  {sectionMessageConversationId ? (
+                    <>
+                      <div className="ensemble-list">
+                        {remoteConversationMessages.length ? (
+                          remoteConversationMessages.map((message) => (
+                            <article className="ensemble-row panel" key={message.messageId}>
+                              <div>
+                                <p className="ensemble-role">From: {message.senderId}</p>
+                                <h3>{message.body}</h3>
+                              </div>
+                              <p className="ensemble-role">
+                                {message.createdAt ? new Date(message.createdAt).toLocaleString() : "Unknown"}
+                              </p>
+                            </article>
+                          ))
+                        ) : (
+                          <article className="panel">
+                            <h3>No messages in this conversation</h3>
+                            <p>Send the first message below.</p>
+                          </article>
+                        )}
+                      </div>
+                      <label className="field">
+                        <span>Reply</span>
+                        <textarea
+                          value={sectionMessageBody}
+                          onChange={(event) => setSectionMessageBody(event.target.value)}
+                          placeholder="Write a reply"
+                          rows={4}
+                        />
+                      </label>
+                      <div className="form-actions">
+                        <button className="button button-primary" type="submit" disabled={formBusy}>
+                          Send reply
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                </form>
 
                 <div className="section">
                   <div className="section-header">
