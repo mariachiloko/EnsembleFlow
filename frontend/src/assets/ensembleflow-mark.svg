@@ -1,29 +1,24 @@
-<svg width="180" height="150" viewBox="0 0 180 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="220" height="170" viewBox="0 0 220 170" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="g" x1="17" y1="118" x2="135" y2="18" gradientUnits="userSpaceOnUse">
+    <linearGradient id="g" x1="29" y1="130" x2="162" y2="26" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#d736f5"/>
       <stop offset="0.48" stop-color="#2f7cff"/>
       <stop offset="1" stop-color="#25f4d0"/>
     </linearGradient>
-    <filter id="glow" x="-18" y="-18" width="210" height="186" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="4" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.13 0 0 0 0 0.72 0 0 0 0 1 0 0 0 0.28 0"/>
-      <feBlend in="SourceGraphic"/>
-    </filter>
   </defs>
 
-  <g filter="url(#glow)">
-    <path
-      d="M59 118c-29.8 0-54-24.2-54-54s24.2-54 54-54c18.4 0 35 9.2 44.9 24.2L88.8 48.1C82.8 37.8 71.7 31 59 31c-18.2 0-33 14.8-33 33s14.8 33 33 33 33-14.8 33-33V42c0-32 26-58 58-58h13c7.3 0 13.2 5.9 13.2 13.2S170.3 10.4 163 10.4h-13c-17.4 0-31.6 14.2-31.6 31.6v14.2c8.4-6.1 18.7-9.7 29.8-9.7H163c7.3 0 13.2 5.9 13.2 13.2S170.3 72.9 163 72.9h-14.8c-16.5 0-29.8 13.4-29.8 29.8V118H92V64c0 29.8-24.2 54-54 54Z"
-      fill="url(#g)"
-      transform="translate(8 18) scale(.78)"
-    />
-    <path
-      d="M55 67.8V48.2c0-4.9 5.5-7.8 9.5-5l14 9.8c3.5 2.4 3.5 7.6 0 10l-14 9.8c-4 2.8-9.5-.1-9.5-5Z"
-      fill="#081123"
-    />
-    <rect x="124" y="75" width="9" height="29" rx="4.5" fill="url(#g)"/>
-    <rect x="143" y="58" width="9" height="63" rx="4.5" fill="url(#g)"/>
-    <rect x="162" y="82" width="9" height="36" rx="4.5" fill="url(#g)"/>
-  </g>
+  <path
+    d="M73 133c-33.7 0-61-27.3-61-61s27.3-61 61-61c20.8 0 39.6 10.4 50.8 27.3l-18.6 15.1C98.3 41 86.5 33 73 33c-21.5 0-39 17.5-39 39s17.5 39 39 39 39-17.5 39-39V47c0-37 30-67 67-67h18c8.4 0 15.3 6.9 15.3 15.3S205.4 10.6 197 10.6h-18c-20.1 0-36.4 16.3-36.4 36.4v16.5c9.7-7.1 21.6-11.2 34.4-11.2h20c8.4 0 15.3 6.9 15.3 15.3S205.4 82.9 197 82.9h-20c-19 0-34.4 15.4-34.4 34.4V133H112V72c0 33.7-27.3 61-61 61Z"
+    fill="url(#g)"
+    transform="translate(4 25) scale(.74)"
+  />
+
+  <path
+    d="M56 77.8V54.2c0-5.6 6.3-9 10.9-5.8l16.9 11.8c4 2.8 4 8.8 0 11.6L66.9 83.6C62.3 86.8 56 83.4 56 77.8Z"
+    fill="#081123"
+  />
+
+  <rect x="128" y="79" width="8" height="30" rx="4" fill="url(#g)"/>
+  <rect x="145" y="60" width="9" height="68" rx="4.5" fill="url(#g)"/>
+  <rect x="164" y="84" width="8" height="42" rx="4" fill="url(#g)"/>
 </svg>
