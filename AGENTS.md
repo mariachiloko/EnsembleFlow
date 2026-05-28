@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 17: approved member placement and ensemble-vs-section roster views.
+Phase 18: stale session handling and explicit director/member login.
 
 ## Project Standards
 
@@ -104,6 +104,9 @@ Phase 17: approved member placement and ensemble-vs-section roster views.
 - Replaced the raw member user-id field with an approved-member picker for section placement.
 - Added explicit ensemble roster and section roster views on the director side.
 - Added a section roster panel so the director can compare the full ensemble list against one section at a time.
+- Added local session expiration checks so old Cognito tokens are cleared instead of silently reused.
+- Updated director/member sign-in to clear the previous local session before starting Cognito login.
+- Added a forced login prompt for portal sign-in so Cognito does not silently reuse a different email account.
 
 ## What Still Needs To Happen
 
@@ -121,3 +124,4 @@ Phase 17: approved member placement and ensemble-vs-section roster views.
 - Verify profile save in the browser now that the backend error handling is deployed.
 - Verify the opened director ensemble shows its existing join code after refresh.
 - Verify the director section roster and ensemble roster read cleanly in the browser.
+- Verify director sign-in after being away shows the intended email/account instead of reusing a stale member session.

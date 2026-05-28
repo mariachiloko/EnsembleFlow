@@ -17,6 +17,7 @@ export type AuthSession = {
   refreshToken?: string;
   tokenType?: string;
   expiresIn?: number;
+  expiresAt?: number;
 };
 
 export const cognitoDomain =
@@ -66,7 +67,40 @@ async function sha256(input: string) {
   return base64UrlEncode(new Uint8Array(hash));
 }
 
-export async function beginCognitoSignIn() {
+function decodeJwtPayload(token?: string) {
+  if (!token) {
+    return {};
+  }
+
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) {
+      return {};
+    }
+
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function getSessionExpiresAt(session: AuthSession) {
+  if (typeof session.expiresAt === "number") {
+    return session.expiresAt;
+  }
+
+  const claims = decodeJwtPayload(session.idToken || session.accessToken);
+  return typeof claims.exp === "number" ? claims.exp * 1000 : 0;
+}
+
+function isSessionExpired(session: AuthSession) {
+  const expiresAt = getSessionExpiresAt(session);
+  return Boolean(expiresAt && Date.now() >= expiresAt - 60_000);
+}
+
+export async function beginCognitoSignIn(options: { forceLogin?: boolean } = {}) {
   if (!cognitoDomain || !cognitoClientId || !cognitoRedirectUri) {
     throw new Error("Cognito settings are incomplete.");
   }
@@ -86,6 +120,9 @@ export async function beginCognitoSignIn() {
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set("code_challenge", challenge);
   authUrl.searchParams.set("code_challenge_method", "S256");
+  if (options.forceLogin) {
+    authUrl.searchParams.set("prompt", "login");
+  }
 
   window.location.assign(authUrl.toString());
 }
@@ -106,8 +143,15 @@ export function loadStoredSession() {
   if (!raw) return null;
 
   try {
-    return JSON.parse(raw) as AuthSession;
+    const session = JSON.parse(raw) as AuthSession;
+    if (isSessionExpired(session)) {
+      clearSession();
+      return null;
+    }
+
+    return session;
   } catch {
+    clearSession();
     return null;
   }
 }
@@ -203,6 +247,7 @@ export async function handleCognitoCallback(url = window.location.href) {
     idToken: tokens.id_token,
     refreshToken: tokens.refresh_token,
     expiresIn: tokens.expires_in,
+    expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : undefined,
     tokenType: tokens.token_type,
   };
 

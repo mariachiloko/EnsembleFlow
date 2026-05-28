@@ -931,8 +931,13 @@ function App() {
 
   async function handlePortalSignIn(mode: "director" | "member") {
     try {
+      clearSession();
+      setAuthSession(null);
+      setAccessToken("");
+      setIsDirectorAccount(false);
+      setPortalMode(mode);
       saveRequestedPortal(mode);
-      await beginCognitoSignIn();
+      await beginCognitoSignIn({ forceLogin: true });
     } catch (error) {
       setAuthMessage(error instanceof Error ? error.message : "Could not start sign-in.");
     }
