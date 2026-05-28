@@ -105,6 +105,24 @@ ul {
   font-size: 1.4rem;
 }
 
+.brand-logo {
+  width: min(360px, 100%);
+  margin-bottom: 18px;
+}
+
+.brand-logo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  color: var(--text);
+  filter: drop-shadow(0 12px 26px rgba(39, 242, 211, 0.16));
+}
+
+.brand-logo-compact {
+  width: 190px;
+  margin-bottom: 14px;
+}
+
 .sidebar-status {
   display: flex;
   flex-wrap: wrap;

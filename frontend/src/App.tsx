@@ -50,6 +50,7 @@ import {
   saveRequestedPortal,
   type AuthSession,
 } from "./lib/auth";
+import ensembleFlowLogo from "./assets/ensembleflow-logo.svg";
 
 const placeholderProfile = {
   userId: "",
@@ -112,6 +113,14 @@ function getMemberDisplayName(member: { userId: string; username?: string; displ
   }
 
   return `Member ${member.userId.slice(0, 8)}`;
+}
+
+function BrandLogo({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={compact ? "brand-logo brand-logo-compact" : "brand-logo"}>
+      <img src={ensembleFlowLogo} alt="EnsembleFlow" />
+    </div>
+  );
 }
 
 function App() {
@@ -1776,7 +1785,7 @@ function App() {
       <main className="app-shell">
         <aside className="sidebar panel">
           <div>
-            <p className="eyebrow">EnsembleFlow</p>
+            <BrandLogo compact />
             <h2>Director dashboard</h2>
             <p className="muted-copy">Manage ensembles, sections, assignments, and announcements.</p>
           </div>
@@ -1805,7 +1814,7 @@ function App() {
         <div className="workspace">
           <section className="hero" id="overview">
             <div className="hero-topline">
-              <p className="eyebrow">EnsembleFlow</p>
+              <BrandLogo compact />
             </div>
             <div className="hero-grid hero-grid-main">
               <div>
@@ -2819,7 +2828,7 @@ function App() {
     return (
       <main className="auth-shell">
         <section className="auth-hero panel panel-accent">
-          <p className="eyebrow">EnsembleFlow</p>
+          <BrandLogo />
           <h1>Choose how you want to sign in.</h1>
           <p className="lede">
             Directors and members use the same secure Cognito login, but they land on different dashboards.
@@ -2879,7 +2888,7 @@ function App() {
     <main className="app-shell">
       <aside className="sidebar panel">
         <div>
-          <p className="eyebrow">EnsembleFlow</p>
+          <BrandLogo compact />
           <h2>{isDirectorMode ? "Director dashboard" : "Member dashboard"}</h2>
           <p className="muted-copy">
             {isDirectorMode
@@ -2919,7 +2928,7 @@ function App() {
       <div className="workspace">
         <section className="hero" id="overview">
           <div className="hero-topline">
-            <p className="eyebrow">EnsembleFlow</p>
+            <BrandLogo compact />
           </div>
           <div className="hero-grid hero-grid-main">
             <div>

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 20: member display names in rosters and messages.
+Phase 21: app branding and logo integration.
 
 ## Project Standards
 
@@ -115,6 +115,8 @@ Phase 20: member display names in rosters and messages.
 - Added membership profile-label enrichment so rosters can show display name or username instead of raw Cognito user IDs.
 - Added frontend member-name fallbacks so old records still render cleanly if a member has not saved a profile yet.
 - Added the Lambda `BatchGetItem` permission needed to load profile labels for roster membership lists.
+- Added the EnsembleFlow logo as a frontend SVG asset and favicon.
+- Replaced text-only brand labels in the sign-in screen, sidebar, and hero header with the logo lockup.
 
 ## What Still Needs To Happen
 
@@ -137,3 +139,4 @@ Phase 20: member display names in rosters and messages.
 - Verify direct member messages appear in both the director inbox and the member's section-scoped inbox.
 - Refresh AWS credentials and rerun Terraform apply; the first deploy attempt for profile-label enrichment failed because the AWS SSO token was expired.
 - Verify rosters and message sender labels show member display names/usernames after the backend deploy.
+- Decide later if a transparent PNG export is needed for app store/social/portfolio mockups.
