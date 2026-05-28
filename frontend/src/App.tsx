@@ -50,7 +50,7 @@ import {
   saveRequestedPortal,
   type AuthSession,
 } from "./lib/auth";
-import ensembleFlowLogo from "./assets/ensembleflow-logo.svg";
+import ensembleFlowMark from "./assets/ensembleflow-mark.svg";
 
 const placeholderProfile = {
   userId: "",
@@ -118,7 +118,11 @@ function getMemberDisplayName(member: { userId: string; username?: string; displ
 function BrandLogo({ compact = false }: { compact?: boolean }) {
   return (
     <div className={compact ? "brand-logo brand-logo-compact" : "brand-logo"}>
-      <img src={ensembleFlowLogo} alt="EnsembleFlow" />
+      <img src={ensembleFlowMark} alt="" aria-hidden="true" />
+      <span className="brand-wordmark" aria-label="EnsembleFlow">
+        <span>ensemble</span>
+        <span>flow</span>
+      </span>
     </div>
   );
 }

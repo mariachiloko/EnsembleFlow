@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 21: app branding and logo integration.
+Phase 22: modernized logo lockup and app color system.
 
 ## Project Standards
 
@@ -117,6 +117,8 @@ Phase 21: app branding and logo integration.
 - Added the Lambda `BatchGetItem` permission needed to load profile labels for roster membership lists.
 - Added the EnsembleFlow logo as a frontend SVG asset and favicon.
 - Replaced text-only brand labels in the sign-in screen, sidebar, and hero header with the logo lockup.
+- Replaced the squeezed full-logo usage with a compact mark plus live wordmark so the brand scales cleanly in sidebars and headers.
+- Shifted the app color system from beige/green to navy, electric blue, cyan, and purple to match the EnsembleFlow mark.
 
 ## What Still Needs To Happen
 
@@ -140,3 +142,4 @@ Phase 21: app branding and logo integration.
 - Refresh AWS credentials and rerun Terraform apply; the first deploy attempt for profile-label enrichment failed because the AWS SSO token was expired.
 - Verify rosters and message sender labels show member display names/usernames after the backend deploy.
 - Decide later if a transparent PNG export is needed for app store/social/portfolio mockups.
+- Review the updated dark/light branding in the browser and tune spacing if the mark should be larger or smaller.
