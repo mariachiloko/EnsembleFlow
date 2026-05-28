@@ -1,3 +1,10 @@
+module "frontend" {
+  source = "./modules/frontend"
+
+  project_name = var.project_name
+  environment  = var.environment
+}
+
 module "auth" {
   source = "./modules/auth"
 
@@ -5,8 +12,8 @@ module "auth" {
   environment   = var.environment
   aws_region    = var.aws_region
   domain_prefix = var.cognito_domain_prefix
-  callback_urls = var.oauth_callback_urls
-  logout_urls   = var.oauth_logout_urls
+  callback_urls = distinct(concat(var.oauth_callback_urls, [module.frontend.site_url]))
+  logout_urls   = distinct(concat(var.oauth_logout_urls, [module.frontend.site_url]))
 }
 
 module "database" {
@@ -21,7 +28,7 @@ module "storage" {
 
   project_name            = var.project_name
   environment             = var.environment
-  allowed_origins         = concat([var.web_app_origin], var.additional_web_origins)
+  allowed_origins         = distinct(concat([var.web_app_origin, module.frontend.site_url], var.additional_web_origins))
   enable_versioning       = true
   enable_server_side_logs = false
 }
@@ -32,7 +39,7 @@ module "api" {
   project_name                     = var.project_name
   environment                      = var.environment
   aws_region                       = var.aws_region
-  allowed_origin                   = var.web_app_origin
+  allowed_origins                  = distinct(concat([var.web_app_origin, module.frontend.site_url], var.additional_web_origins))
   director_email_allowlist         = var.director_email_allowlist
   user_pool_id                     = module.auth.user_pool_id
   user_pool_client_id              = module.auth.user_pool_client_id

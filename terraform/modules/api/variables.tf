@@ -13,9 +13,9 @@ variable "aws_region" {
   description = "AWS region for deployed resources."
 }
 
-variable "allowed_origin" {
-  type        = string
-  description = "Primary browser origin allowed by CORS."
+variable "allowed_origins" {
+  type        = list(string)
+  description = "Browser origins allowed by CORS."
 }
 
 variable "director_email_allowlist" {

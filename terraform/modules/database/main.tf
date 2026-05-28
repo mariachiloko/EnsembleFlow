@@ -4,7 +4,7 @@ locals {
 
 resource "aws_dynamodb_table" "users" {
   name         = "${local.name_prefix}-users"
-  billing_mode  = "PAY_PER_REQUEST"
+  billing_mode = "PAY_PER_REQUEST"
   hash_key     = "userId"
 
   attribute {
@@ -19,7 +19,7 @@ resource "aws_dynamodb_table" "users" {
 
 resource "aws_dynamodb_table" "usernames" {
   name         = "${local.name_prefix}-usernames"
-  billing_mode  = "PAY_PER_REQUEST"
+  billing_mode = "PAY_PER_REQUEST"
   hash_key     = "username"
 
   attribute {
@@ -33,9 +33,9 @@ resource "aws_dynamodb_table" "usernames" {
 }
 
 resource "aws_dynamodb_table" "ensembles" {
-  name        = "${local.name_prefix}-ensembles"
+  name         = "${local.name_prefix}-ensembles"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key    = "ensembleId"
+  hash_key     = "ensembleId"
 
   attribute {
     name = "ensembleId"
@@ -71,7 +71,7 @@ resource "aws_dynamodb_table" "ensembles" {
 
 resource "aws_dynamodb_table" "memberships" {
   name         = "${local.name_prefix}-memberships"
-  billing_mode  = "PAY_PER_REQUEST"
+  billing_mode = "PAY_PER_REQUEST"
   hash_key     = "userId"
   range_key    = "ensembleId"
 
@@ -98,7 +98,7 @@ resource "aws_dynamodb_table" "memberships" {
 
 resource "aws_dynamodb_table" "sections" {
   name         = "${local.name_prefix}-sections"
-  billing_mode  = "PAY_PER_REQUEST"
+  billing_mode = "PAY_PER_REQUEST"
   hash_key     = "sectionId"
 
   attribute {
@@ -135,7 +135,7 @@ resource "aws_dynamodb_table" "sections" {
 
 resource "aws_dynamodb_table" "uploads" {
   name         = "${local.name_prefix}-uploads"
-  billing_mode  = "PAY_PER_REQUEST"
+  billing_mode = "PAY_PER_REQUEST"
   hash_key     = "uploadId"
 
   attribute {
@@ -171,9 +171,9 @@ resource "aws_dynamodb_table" "uploads" {
 }
 
 resource "aws_dynamodb_table" "assignments" {
-  name        = "${local.name_prefix}-assignments"
+  name         = "${local.name_prefix}-assignments"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key    = "assignmentId"
+  hash_key     = "assignmentId"
 
   attribute {
     name = "assignmentId"
@@ -208,9 +208,9 @@ resource "aws_dynamodb_table" "assignments" {
 }
 
 resource "aws_dynamodb_table" "submissions" {
-  name        = "${local.name_prefix}-submissions"
+  name         = "${local.name_prefix}-submissions"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key    = "submissionId"
+  hash_key     = "submissionId"
 
   attribute {
     name = "submissionId"
@@ -273,7 +273,7 @@ resource "aws_dynamodb_table" "submissions" {
 
 resource "aws_dynamodb_table" "comments" {
   name         = "${local.name_prefix}-comments"
-  billing_mode  = "PAY_PER_REQUEST"
+  billing_mode = "PAY_PER_REQUEST"
   hash_key     = "submissionId"
   range_key    = "commentId"
 
@@ -293,9 +293,9 @@ resource "aws_dynamodb_table" "comments" {
 }
 
 resource "aws_dynamodb_table" "conversations" {
-  name        = "${local.name_prefix}-conversations"
+  name         = "${local.name_prefix}-conversations"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key    = "conversationId"
+  hash_key     = "conversationId"
 
   attribute {
     name = "conversationId"
@@ -330,10 +330,10 @@ resource "aws_dynamodb_table" "conversations" {
 }
 
 resource "aws_dynamodb_table" "conversation_messages" {
-  name        = "${local.name_prefix}-conversation-messages"
+  name         = "${local.name_prefix}-conversation-messages"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key    = "conversationId"
-  range_key   = "messageId"
+  hash_key     = "conversationId"
+  range_key    = "messageId"
 
   attribute {
     name = "conversationId"
@@ -351,9 +351,9 @@ resource "aws_dynamodb_table" "conversation_messages" {
 }
 
 resource "aws_dynamodb_table" "invitations" {
-  name        = "${local.name_prefix}-invitations"
+  name         = "${local.name_prefix}-invitations"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key    = "inviteCode"
+  hash_key     = "inviteCode"
 
   attribute {
     name = "inviteCode"
@@ -378,7 +378,7 @@ resource "aws_dynamodb_table" "invitations" {
 
 resource "aws_dynamodb_table" "notifications" {
   name         = "${local.name_prefix}-notifications"
-  billing_mode  = "PAY_PER_REQUEST"
+  billing_mode = "PAY_PER_REQUEST"
   hash_key     = "userId"
   range_key    = "notificationId"
 

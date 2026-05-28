@@ -98,32 +98,32 @@ resource "aws_iam_role_policy" "lambda" {
 }
 
 resource "aws_lambda_function" "this" {
-  function_name = "${local.name_prefix}-api"
-  role          = aws_iam_role.lambda.arn
-  handler       = "index.handler"
-  runtime       = "nodejs20.x"
-  filename      = data.archive_file.handler_zip.output_path
+  function_name    = "${local.name_prefix}-api"
+  role             = aws_iam_role.lambda.arn
+  handler          = "index.handler"
+  runtime          = "nodejs20.x"
+  filename         = data.archive_file.handler_zip.output_path
   source_code_hash = data.archive_file.handler_zip.output_base64sha256
-  timeout       = 10
-  memory_size   = 128
+  timeout          = 10
+  memory_size      = 128
 
   environment {
     variables = {
-      USERS_TABLE_NAME       = var.users_table_name
-      USERNAMES_TABLE_NAME   = var.usernames_table_name
-      ENSEMBLES_TABLE_NAME    = var.ensembles_table_name
-      MEMBERSHIPS_TABLE_NAME  = var.memberships_table_name
-      SECTIONS_TABLE_NAME     = var.sections_table_name
-      UPLOADS_TABLE_NAME      = var.uploads_table_name
-      ASSIGNMENTS_TABLE_NAME  = var.assignments_table_name
-      SUBMISSIONS_TABLE_NAME  = var.submissions_table_name
-      COMMENTS_TABLE_NAME     = var.comments_table_name
-      CONVERSATIONS_TABLE_NAME = var.conversations_table_name
+      USERS_TABLE_NAME                 = var.users_table_name
+      USERNAMES_TABLE_NAME             = var.usernames_table_name
+      ENSEMBLES_TABLE_NAME             = var.ensembles_table_name
+      MEMBERSHIPS_TABLE_NAME           = var.memberships_table_name
+      SECTIONS_TABLE_NAME              = var.sections_table_name
+      UPLOADS_TABLE_NAME               = var.uploads_table_name
+      ASSIGNMENTS_TABLE_NAME           = var.assignments_table_name
+      SUBMISSIONS_TABLE_NAME           = var.submissions_table_name
+      COMMENTS_TABLE_NAME              = var.comments_table_name
+      CONVERSATIONS_TABLE_NAME         = var.conversations_table_name
       CONVERSATION_MESSAGES_TABLE_NAME = var.conversation_messages_table_name
-      INVITATIONS_TABLE_NAME  = var.invitations_table_name
-      NOTIFICATIONS_TABLE_NAME = var.notifications_table_name
-      UPLOADS_BUCKET_NAME     = var.uploads_bucket_name
-      DIRECTOR_EMAIL_ALLOWLIST = join(",", var.director_email_allowlist)
+      INVITATIONS_TABLE_NAME           = var.invitations_table_name
+      NOTIFICATIONS_TABLE_NAME         = var.notifications_table_name
+      UPLOADS_BUCKET_NAME              = var.uploads_bucket_name
+      DIRECTOR_EMAIL_ALLOWLIST         = join(",", var.director_email_allowlist)
     }
   }
 }
@@ -141,7 +141,7 @@ resource "aws_apigatewayv2_api" "this" {
     allow_credentials = false
     allow_headers     = ["authorization", "content-type"]
     allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    allow_origins     = [var.allowed_origin]
+    allow_origins     = var.allowed_origins
     max_age           = 3600
   }
 }
@@ -154,9 +154,9 @@ resource "aws_apigatewayv2_integration" "lambda" {
 }
 
 resource "aws_apigatewayv2_authorizer" "jwt" {
-  api_id          = aws_apigatewayv2_api.this.id
-  name            = "${local.name_prefix}-jwt"
-  authorizer_type = "JWT"
+  api_id           = aws_apigatewayv2_api.this.id
+  name             = "${local.name_prefix}-jwt"
+  authorizer_type  = "JWT"
   identity_sources = ["$request.header.Authorization"]
 
   jwt_configuration {
@@ -173,45 +173,45 @@ resource "aws_apigatewayv2_route" "health" {
 
 locals {
   protected_routes = {
-    "GET /profiles" = {}
-    "POST /profiles" = {}
-    "GET /profiles/{userId}" = {}
-    "PUT /profiles/{userId}" = {}
-    "GET /session" = {}
-    "GET /ensembles" = {}
-    "POST /ensembles" = {}
-    "GET /ensembles/{ensembleId}" = {}
-    "PUT /ensembles/{ensembleId}" = {}
-    "POST /uploads/presign" = {}
-    "GET /uploads/url" = {}
-    "GET /sections" = {}
-    "POST /sections" = {}
-    "GET /sections/{sectionId}" = {}
-    "PUT /sections/{sectionId}" = {}
-    "GET /memberships" = {}
-    "POST /memberships" = {}
+    "GET /profiles"                          = {}
+    "POST /profiles"                         = {}
+    "GET /profiles/{userId}"                 = {}
+    "PUT /profiles/{userId}"                 = {}
+    "GET /session"                           = {}
+    "GET /ensembles"                         = {}
+    "POST /ensembles"                        = {}
+    "GET /ensembles/{ensembleId}"            = {}
+    "PUT /ensembles/{ensembleId}"            = {}
+    "POST /uploads/presign"                  = {}
+    "GET /uploads/url"                       = {}
+    "GET /sections"                          = {}
+    "POST /sections"                         = {}
+    "GET /sections/{sectionId}"              = {}
+    "PUT /sections/{sectionId}"              = {}
+    "GET /memberships"                       = {}
+    "POST /memberships"                      = {}
     "GET /memberships/{userId}/{ensembleId}" = {}
     "PUT /memberships/{userId}/{ensembleId}" = {}
-    "GET /assignments" = {}
-    "POST /assignments" = {}
-    "GET /assignments/{assignmentId}" = {}
-    "PUT /assignments/{assignmentId}" = {}
-    "GET /submissions" = {}
-    "POST /submissions" = {}
-    "GET /submissions/{submissionId}" = {}
-    "PUT /submissions/{submissionId}" = {}
-    "GET /comments" = {}
-    "POST /comments" = {}
-    "GET /conversations" = {}
-    "POST /conversations" = {}
-    "GET /messages" = {}
-    "POST /messages" = {}
-    "GET /invitations" = {}
-    "POST /invitations" = {}
-    "POST /invitations/accept" = {}
-    "GET /notifications" = {}
-    "PUT /notifications/{notificationId}" = {}
-    "POST /announcements" = {}
+    "GET /assignments"                       = {}
+    "POST /assignments"                      = {}
+    "GET /assignments/{assignmentId}"        = {}
+    "PUT /assignments/{assignmentId}"        = {}
+    "GET /submissions"                       = {}
+    "POST /submissions"                      = {}
+    "GET /submissions/{submissionId}"        = {}
+    "PUT /submissions/{submissionId}"        = {}
+    "GET /comments"                          = {}
+    "POST /comments"                         = {}
+    "GET /conversations"                     = {}
+    "POST /conversations"                    = {}
+    "GET /messages"                          = {}
+    "POST /messages"                         = {}
+    "GET /invitations"                       = {}
+    "POST /invitations"                      = {}
+    "POST /invitations/accept"               = {}
+    "GET /notifications"                     = {}
+    "PUT /notifications/{notificationId}"    = {}
+    "POST /announcements"                    = {}
   }
 }
 

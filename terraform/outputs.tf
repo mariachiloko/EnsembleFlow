@@ -22,3 +22,18 @@ output "uploads_bucket_name" {
   description = "S3 bucket used for uploads."
   value       = module.storage.bucket_name
 }
+
+output "frontend_bucket_name" {
+  description = "S3 bucket used for the built frontend."
+  value       = module.frontend.bucket_name
+}
+
+output "frontend_distribution_id" {
+  description = "CloudFront distribution ID for the frontend."
+  value       = module.frontend.distribution_id
+}
+
+output "frontend_url" {
+  description = "Public HTTPS URL for the frontend."
+  value       = module.frontend.site_url
+}

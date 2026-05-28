@@ -23,6 +23,8 @@ If you want to enable a director email allowlist, provide it locally at deploy t
 - Lambda handler
 - DynamoDB tables
 - private S3 bucket for uploads
+- private S3 bucket for the built frontend
+- CloudFront distribution for the public frontend URL
 - API permissions and routes
 - email-based sign-in and email recovery in Cognito
 
@@ -30,6 +32,7 @@ If you want to enable a director email allowlist, provide it locally at deploy t
 
 - copy the Terraform outputs into the frontend environment variables
 - configure the Cognito hosted UI URLs in the browser app
+- build and upload the frontend to the CloudFront-backed S3 bucket
 - test director and member sign-in paths
 - test username setup, profile updates, uploads, assignments, comments, and section feeds
 - verify blocked membership behavior and submission cleanup paths
@@ -44,6 +47,24 @@ Current Terraform outputs:
 - Cognito app client ID
 - Cognito hosted UI domain
 - private uploads bucket name
+- frontend S3 bucket name
+- CloudFront distribution ID
+- public frontend URL
+
+## Public Frontend Deployment
+
+After Terraform has created or updated the stack, deploy the built frontend with:
+
+```bash
+./scripts/deploy_frontend.sh
+```
+
+The script:
+- reads Terraform outputs
+- writes a local-only production env file for Vite
+- builds the React app
+- syncs `frontend/dist` to the private frontend S3 bucket
+- invalidates CloudFront so the newest build is served
 
 ## Notes
 

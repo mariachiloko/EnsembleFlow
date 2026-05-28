@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 22: modernized logo lockup and app color system.
+Phase 23: public frontend hosting and live deployment.
 
 ## Project Standards
 
@@ -121,6 +121,10 @@ Phase 22: modernized logo lockup and app color system.
 - Shifted the app color system from beige/green to navy, electric blue, cyan, and purple to match the EnsembleFlow mark.
 - Restored the app mark closer to the original music/play/flow concept while keeping the separate side wordmark.
 - Fixed the logo mark SVG viewBox/padding so the restored mark no longer renders clipped in the header/sidebar.
+- Added CloudFront and a private S3 bucket for public frontend hosting.
+- Wired the CloudFront frontend URL into Cognito callback/logout URLs, API CORS, and upload bucket CORS.
+- Added `scripts/deploy_frontend.sh` to build the Vite app from Terraform outputs, upload to S3, and invalidate CloudFront.
+- Deployed the frontend publicly at the current CloudFront URL.
 
 ## What Still Needs To Happen
 
@@ -145,3 +149,4 @@ Phase 22: modernized logo lockup and app color system.
 - Verify rosters and message sender labels show member display names/usernames after the backend deploy.
 - Decide later if a transparent PNG export is needed for app store/social/portfolio mockups.
 - Review the updated dark/light branding in the browser and tune spacing if the mark should be larger or smaller.
+- Replace the CloudFront URL with a custom domain later if a cleaner share link is wanted.
