@@ -119,9 +119,9 @@ ul {
 
 .brand-logo img {
   display: block;
-  width: 68px;
-  height: 68px;
-  border-radius: 20px;
+  width: 86px;
+  height: auto;
+  border-radius: 0;
   filter: drop-shadow(0 16px 28px rgba(37, 244, 208, 0.2));
 }
 
@@ -148,9 +148,9 @@ ul {
 }
 
 .brand-logo-compact img {
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
+  width: 58px;
+  height: auto;
+  border-radius: 0;
 }
 
 .brand-logo-compact .brand-wordmark {

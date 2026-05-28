@@ -1,27 +1,29 @@
-<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="180" height="150" viewBox="0 0 180 150" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="g" x1="22" y1="132" x2="139" y2="25" gradientUnits="userSpaceOnUse">
+    <linearGradient id="g" x1="17" y1="118" x2="135" y2="18" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#d736f5"/>
-      <stop offset="0.5" stop-color="#2f7cff"/>
+      <stop offset="0.48" stop-color="#2f7cff"/>
       <stop offset="1" stop-color="#25f4d0"/>
     </linearGradient>
-    <linearGradient id="panel" x1="18" y1="17" x2="144" y2="145" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#111a35"/>
-      <stop offset="1" stop-color="#050814"/>
-    </linearGradient>
+    <filter id="glow" x="-18" y="-18" width="210" height="186" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.13 0 0 0 0 0.72 0 0 0 0 1 0 0 0 0.28 0"/>
+      <feBlend in="SourceGraphic"/>
+    </filter>
   </defs>
 
-  <rect x="8" y="8" width="144" height="144" rx="34" fill="url(#panel)"/>
-  <rect x="8" y="8" width="144" height="144" rx="34" stroke="url(#g)" stroke-opacity=".38" stroke-width="2"/>
-  <text
-    x="80"
-    y="101"
-    text-anchor="middle"
-    fill="url(#g)"
-    font-family="Inter, Avenir, Helvetica, Arial, sans-serif"
-    font-size="74"
-    font-weight="850"
-    letter-spacing="-10"
-  >ef</text>
-  <circle cx="125" cy="43" r="7" fill="#25f4d0"/>
+  <g filter="url(#glow)">
+    <path
+      d="M59 118c-29.8 0-54-24.2-54-54s24.2-54 54-54c18.4 0 35 9.2 44.9 24.2L88.8 48.1C82.8 37.8 71.7 31 59 31c-18.2 0-33 14.8-33 33s14.8 33 33 33 33-14.8 33-33V42c0-32 26-58 58-58h13c7.3 0 13.2 5.9 13.2 13.2S170.3 10.4 163 10.4h-13c-17.4 0-31.6 14.2-31.6 31.6v14.2c8.4-6.1 18.7-9.7 29.8-9.7H163c7.3 0 13.2 5.9 13.2 13.2S170.3 72.9 163 72.9h-14.8c-16.5 0-29.8 13.4-29.8 29.8V118H92V64c0 29.8-24.2 54-54 54Z"
+      fill="url(#g)"
+      transform="translate(8 18) scale(.78)"
+    />
+    <path
+      d="M55 67.8V48.2c0-4.9 5.5-7.8 9.5-5l14 9.8c3.5 2.4 3.5 7.6 0 10l-14 9.8c-4 2.8-9.5-.1-9.5-5Z"
+      fill="#081123"
+    />
+    <rect x="124" y="75" width="9" height="29" rx="4.5" fill="url(#g)"/>
+    <rect x="143" y="58" width="9" height="63" rx="4.5" fill="url(#g)"/>
+    <rect x="162" y="82" width="9" height="36" rx="4.5" fill="url(#g)"/>
+  </g>
 </svg>
