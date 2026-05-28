@@ -289,6 +289,8 @@ export async function listMemberships(token: string, ensembleId?: string) {
     memberships: Array<{
       userId: string;
       ensembleId: string;
+      username: string;
+      displayName: string;
       role: string;
       status: string;
       sectionId: string;
@@ -304,6 +306,8 @@ export async function createMembership(token: string, payload: MembershipPayload
     membership: {
       userId: string;
       ensembleId: string;
+      username: string;
+      displayName: string;
       role: string;
       status: string;
       sectionId: string;
@@ -340,6 +344,8 @@ export async function updateMembership(
     membership: {
       userId: string;
       ensembleId: string;
+      username: string;
+      displayName: string;
       role: string;
       status: string;
       sectionId: string;

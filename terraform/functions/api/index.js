@@ -3,6 +3,7 @@ const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const {
   DynamoDBDocumentClient,
   GetCommand,
+  BatchGetCommand,
   DeleteCommand,
   PutCommand,
   TransactWriteCommand,
@@ -175,6 +176,8 @@ const safeMembership = (item) =>
     ? {
         userId: item.userId,
         ensembleId: item.ensembleId,
+        username: item.username ?? "",
+        displayName: item.displayName ?? "",
         role: item.role ?? "member",
         status: item.status ?? "active",
         sectionId: item.sectionId ?? "",
@@ -468,6 +471,41 @@ const listEnsembleMembershipRecords = async (ensembleId) => {
   );
 
   return result.Items || [];
+};
+
+const enrichMembershipsWithProfiles = async (memberships) => {
+  const uniqueUserIds = [...new Set((memberships || []).map((item) => item.userId).filter(Boolean))];
+  if (!uniqueUserIds.length) {
+    return [];
+  }
+
+  const profileItems = [];
+  for (let index = 0; index < uniqueUserIds.length; index += 100) {
+    const keys = uniqueUserIds.slice(index, index + 100).map((userId) => ({ userId }));
+    const result = await ddb.send(
+      new BatchGetCommand({
+        RequestItems: {
+          [env.usersTableName]: {
+            Keys: keys,
+            ProjectionExpression: "userId, username, displayName",
+          },
+        },
+      }),
+    );
+
+    profileItems.push(...(result.Responses?.[env.usersTableName] || []));
+  }
+
+  const profilesByUserId = new Map(profileItems.map((item) => [item.userId, item]));
+
+  return memberships.map((membership) => {
+    const profile = profilesByUserId.get(membership.userId) || {};
+    return {
+      ...membership,
+      username: profile.username || "",
+      displayName: profile.displayName || "",
+    };
+  });
 };
 
 const getConversationRecord = async (conversationId) => {
@@ -1045,9 +1083,10 @@ const listMemberships = async (event) => {
           },
         }),
       );
+      const memberships = await enrichMembershipsWithProfiles(result.Items || []);
 
       return response(200, {
-        memberships: (result.Items || []).map(safeMembership),
+        memberships: memberships.map(safeMembership),
       });
     }
 
@@ -1063,10 +1102,14 @@ const listMemberships = async (event) => {
       }),
     );
 
+    const memberships = await enrichMembershipsWithProfiles(
+      (result.Items || []).filter(
+        (item) => !currentMembership?.sectionId || item.sectionId === currentMembership.sectionId,
+      ),
+    );
+
     return response(200, {
-      memberships: (result.Items || [])
-        .filter((item) => !currentMembership?.sectionId || item.sectionId === currentMembership.sectionId)
-        .map(safeMembership),
+      memberships: memberships.map(safeMembership),
     });
   }
 
@@ -1080,8 +1123,10 @@ const listMemberships = async (event) => {
     }),
   );
 
+  const memberships = await enrichMembershipsWithProfiles(result.Items || []);
+
   return response(200, {
-    memberships: (result.Items || []).map(safeMembership),
+    memberships: memberships.map(safeMembership),
   });
 };
 
@@ -1115,8 +1160,10 @@ const getMembership = async (event) => {
     }
   }
 
+  const [membership] = await enrichMembershipsWithProfiles([result.Item]);
+
   return response(200, {
-    membership: safeMembership(result.Item),
+    membership: safeMembership(membership),
   });
 };
 
@@ -1169,8 +1216,10 @@ const createMembership = async (event) => {
     }),
   );
 
+  const [membership] = await enrichMembershipsWithProfiles([item]);
+
   return response(201, {
-    membership: safeMembership(item),
+    membership: safeMembership(membership),
   });
 };
 
@@ -1238,8 +1287,10 @@ const updateMembership = async (event) => {
     }),
   );
 
+  const [membership] = await enrichMembershipsWithProfiles([item]);
+
   return response(200, {
-    membership: safeMembership(item),
+    membership: safeMembership(membership),
   });
 };
 
@@ -1434,8 +1485,10 @@ const acceptInvitation = async (event) => {
     });
   }
 
+  const [membership] = await enrichMembershipsWithProfiles([membershipItem]);
+
   return response(200, {
-    membership: safeMembership(membershipItem),
+    membership: safeMembership(membership),
   });
 };
 

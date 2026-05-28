@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 19: director roster management, member detail, and ensemble inbox.
+Phase 20: member display names in rosters and messages.
 
 ## Project Standards
 
@@ -112,6 +112,9 @@ Phase 19: director roster management, member detail, and ensemble inbox.
 - Added director member-detail views with missing assignments, submissions, remove/block actions, and direct messaging.
 - Added a director-side inbox for conversations in the opened ensemble while keeping member conversations scoped to their assigned section.
 - Updated conversation loading so directors can load ensemble conversations and members still load only section conversations.
+- Added membership profile-label enrichment so rosters can show display name or username instead of raw Cognito user IDs.
+- Added frontend member-name fallbacks so old records still render cleanly if a member has not saved a profile yet.
+- Added the Lambda `BatchGetItem` permission needed to load profile labels for roster membership lists.
 
 ## What Still Needs To Happen
 
@@ -132,3 +135,5 @@ Phase 19: director roster management, member detail, and ensemble inbox.
 - Verify director sign-in after being away shows the intended email/account instead of reusing a stale member session.
 - Verify section placement from the opened director ensemble screen with a real approved member.
 - Verify direct member messages appear in both the director inbox and the member's section-scoped inbox.
+- Refresh AWS credentials and rerun Terraform apply; the first deploy attempt for profile-label enrichment failed because the AWS SSO token was expired.
+- Verify rosters and message sender labels show member display names/usernames after the backend deploy.

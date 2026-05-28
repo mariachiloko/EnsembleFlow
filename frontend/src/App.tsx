@@ -100,6 +100,20 @@ function getInitials(value: string) {
     .slice(0, 2);
 }
 
+function getMemberDisplayName(member: { userId: string; username?: string; displayName?: string }) {
+  const displayName = member.displayName?.trim();
+  if (displayName) {
+    return displayName;
+  }
+
+  const username = member.username?.trim();
+  if (username) {
+    return `@${username}`;
+  }
+
+  return `Member ${member.userId.slice(0, 8)}`;
+}
+
 function App() {
   const [apiState, setApiState] = useState("Checking backend connection...");
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
@@ -149,6 +163,8 @@ function App() {
   const [remoteMemberships, setRemoteMemberships] = useState<Array<{
     userId: string;
     ensembleId: string;
+    username: string;
+    displayName: string;
     role: string;
     status: string;
     sectionId: string;
@@ -735,6 +751,14 @@ function App() {
     : "";
   const signedInEmailNormalized = signedInEmail.trim().toLowerCase();
   const avatarInitials = getInitials(signedInName);
+  const getMemberNameById = (userId: string) => {
+    if (userId === profile.userId) {
+      return signedInName;
+    }
+
+    const membership = activeMemberships.find((item) => item.userId === userId);
+    return membership ? getMemberDisplayName(membership) : `Member ${userId.slice(0, 8)}`;
+  };
   const selectedSubmission =
     visibleSubmissions.find((submission) => submission.submissionId === commentSubmissionId) ||
     visibleSubmissions[0] ||
@@ -1725,7 +1749,7 @@ function App() {
       const result = await createConversation(accessToken, {
         ensembleId: selectedDirectorEnsemble.ensembleId,
         sectionId: selectedDirectorMember.sectionId,
-        title: `Message with ${selectedDirectorMember.userId}`,
+        title: `Message with ${getMemberDisplayName(selectedDirectorMember)}`,
         participantIds: [selectedDirectorMember.userId],
       });
 
@@ -1996,7 +2020,7 @@ function App() {
                           <option value="">Choose member</option>
                           {approvedMemberships.map((membership) => (
                             <option key={`${membership.userId}-${membership.ensembleId}`} value={membership.userId}>
-                              {membership.userId} {membership.sectionName ? `(${membership.sectionName})` : "(unassigned)"}
+                              {getMemberDisplayName(membership)} {membership.sectionName ? `(${membership.sectionName})` : "(unassigned)"}
                             </option>
                           ))}
                         </select>
@@ -2051,9 +2075,9 @@ function App() {
                           selectedDirectorSectionMemberships.map((membership) => (
                             <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
                               <div>
-                                <p className="ensemble-role">Member: {membership.userId}</p>
+                                <p className="ensemble-role">Member</p>
                                 <h3>{membership.sectionName || selectedDirectorSection.name}</h3>
-                                <p className="ensemble-status">Role: {membership.role}</p>
+                                <p className="ensemble-status">{getMemberDisplayName(membership)} | Role: {membership.role}</p>
                               </div>
                               <button
                                 className="button button-secondary"
@@ -2085,9 +2109,9 @@ function App() {
                     activeMemberships.map((membership) => (
                       <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
                         <div>
-                          <p className="ensemble-role">User: {membership.userId}</p>
+                          <p className="ensemble-role">Member</p>
                           <h3>{membership.sectionName || "Unassigned"}</h3>
-                          <p className="ensemble-status">Role: {membership.role}</p>
+                          <p className="ensemble-status">{getMemberDisplayName(membership)} | Role: {membership.role}</p>
                           <p className="ensemble-role">Status: {membership.status || "active"}</p>
                         </div>
                         <div className="form-actions">
@@ -2122,7 +2146,7 @@ function App() {
                     <div className="section-header">
                       <div>
                         <h3>Member details</h3>
-                        <p className="muted-copy">{selectedDirectorMember.userId}</p>
+                        <p className="muted-copy">{getMemberDisplayName(selectedDirectorMember)}</p>
                       </div>
                       <div className="form-actions">
                         <button
@@ -2290,7 +2314,7 @@ function App() {
                           remoteConversationMessages.map((message) => (
                             <article className="ensemble-row panel" key={message.messageId}>
                               <div>
-                                <p className="ensemble-role">From: {message.senderId}</p>
+                                <p className="ensemble-role">From: {getMemberNameById(message.senderId)}</p>
                                 <h3>{message.body}</h3>
                               </div>
                               <p className="ensemble-role">
@@ -3188,9 +3212,9 @@ function App() {
                       currentSectionRoster.map((membership) => (
                         <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
                           <div>
-                            <p className="ensemble-role">Member: {membership.userId}</p>
+                            <p className="ensemble-role">Member</p>
                             <h3>{membership.sectionName || "Section member"}</h3>
-                            <p className="ensemble-status">Role: {membership.role}</p>
+                            <p className="ensemble-status">{getMemberDisplayName(membership)} | Role: {membership.role}</p>
                           </div>
                         </article>
                       ))
@@ -3242,7 +3266,7 @@ function App() {
                                 );
                               }}
                             />
-                            <span>{membership.userId}</span>
+                            <span>{getMemberDisplayName(membership)}</span>
                           </label>
                         ))
                       ) : (
@@ -3301,7 +3325,7 @@ function App() {
                       remoteConversationMessages.map((message) => (
                         <article className="ensemble-row panel" key={message.messageId}>
                           <div>
-                            <p className="ensemble-role">From: {message.senderId}</p>
+                            <p className="ensemble-role">From: {getMemberNameById(message.senderId)}</p>
                             <h3>{message.body}</h3>
                           </div>
                           <p className="ensemble-role">
@@ -3474,7 +3498,7 @@ function App() {
                     <option value="">Choose member</option>
                     {approvedMemberships.map((membership) => (
                       <option key={`${membership.userId}-${membership.ensembleId}`} value={membership.userId}>
-                        {membership.userId} {membership.sectionName ? `(${membership.sectionName})` : ""}
+                        {getMemberDisplayName(membership)} {membership.sectionName ? `(${membership.sectionName})` : ""}
                       </option>
                     ))}
                   </select>
@@ -3545,9 +3569,9 @@ function App() {
                 activeMemberships.map((membership) => (
                   <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
                     <div>
-                      <p className="ensemble-role">User: {membership.userId}</p>
+                      <p className="ensemble-role">Member</p>
                       <h3>{membership.sectionName || "Unassigned"}</h3>
-                      <p className="ensemble-status">Role: {membership.role}</p>
+                      <p className="ensemble-status">{getMemberDisplayName(membership)} | Role: {membership.role}</p>
                     </div>
                   </article>
                 ))
@@ -3583,9 +3607,9 @@ function App() {
                   selectedDirectorSectionMemberships.map((membership) => (
                     <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
                       <div>
-                        <p className="ensemble-role">Member: {membership.userId}</p>
+                        <p className="ensemble-role">Member</p>
                         <h3>{membership.sectionName || "Section member"}</h3>
-                        <p className="ensemble-status">Role: {membership.role}</p>
+                        <p className="ensemble-status">{getMemberDisplayName(membership)} | Role: {membership.role}</p>
                       </div>
                     </article>
                   ))
@@ -3610,9 +3634,9 @@ function App() {
             activeMemberships.map((membership) => (
               <article className="ensemble-row panel" key={`${membership.userId}-${membership.ensembleId}`}>
                 <div>
-                  <p className="ensemble-role">User: {membership.userId}</p>
+                  <p className="ensemble-role">Member</p>
                   <h3>{membership.sectionName || "Unassigned"}</h3>
-                  <p className="ensemble-status">Role: {membership.role}</p>
+                  <p className="ensemble-status">{getMemberDisplayName(membership)} | Role: {membership.role}</p>
                 </div>
                 <div>
                   <p className="ensemble-role">
