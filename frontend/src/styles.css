@@ -111,7 +111,7 @@ ul {
 .brand-logo {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   width: auto;
   max-width: 100%;
   margin-bottom: 18px;
@@ -119,9 +119,9 @@ ul {
 
 .brand-logo img {
   display: block;
-  width: 74px;
-  height: 74px;
-  border-radius: 22px;
+  width: 68px;
+  height: 68px;
+  border-radius: 20px;
   filter: drop-shadow(0 16px 28px rgba(37, 244, 208, 0.2));
 }
 
@@ -130,9 +130,9 @@ ul {
   align-items: baseline;
   gap: 8px;
   color: var(--text);
-  font-size: clamp(2.1rem, 6vw, 3.9rem);
-  font-weight: 700;
-  letter-spacing: -0.08em;
+  font-size: clamp(2rem, 5.5vw, 3.6rem);
+  font-weight: 750;
+  letter-spacing: -0.09em;
   line-height: 1;
 }
 
@@ -143,20 +143,20 @@ ul {
 }
 
 .brand-logo-compact {
-  gap: 9px;
+  gap: 10px;
   margin-bottom: 14px;
 }
 
 .brand-logo-compact img {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
 }
 
 .brand-logo-compact .brand-wordmark {
-  gap: 5px;
-  font-size: 1.4rem;
-  letter-spacing: -0.06em;
+  gap: 4px;
+  font-size: 1.25rem;
+  letter-spacing: -0.07em;
 }
 
 .sidebar-status {

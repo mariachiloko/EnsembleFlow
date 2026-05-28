@@ -1,22 +1,27 @@
 <svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="markGradient" x1="26" y1="121" x2="130" y2="23" gradientUnits="userSpaceOnUse">
+    <linearGradient id="g" x1="22" y1="132" x2="139" y2="25" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#d736f5"/>
-      <stop offset="0.48" stop-color="#2f7cff"/>
+      <stop offset="0.5" stop-color="#2f7cff"/>
       <stop offset="1" stop-color="#25f4d0"/>
     </linearGradient>
-    <filter id="glow" x="-10" y="-10" width="180" height="180" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="4" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.13 0 0 0 0 0.81 0 0 0 0 1 0 0 0 0.42 0"/>
-      <feBlend in="SourceGraphic"/>
-    </filter>
+    <linearGradient id="panel" x1="18" y1="17" x2="144" y2="145" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111a35"/>
+      <stop offset="1" stop-color="#050814"/>
+    </linearGradient>
   </defs>
-  <rect width="160" height="160" rx="38" fill="#050814"/>
-  <g filter="url(#glow)">
-    <path d="M58 119c-29.8 0-54-24.2-54-54s24.2-54 54-54c18.6 0 35.7 9.5 45.6 25l-17.9 14.5C80.5 39.9 70 33 58 33c-17.7 0-32 14.3-32 32s14.3 32 32 32 32-14.3 32-32V23.6C90-7.7 115.4-33 146.6-33H178c7 0 12.7 5.7 12.7 12.7S185-7.6 178-7.6h-31.4c-17.3 0-31.3 14-31.3 31.3V37c8.7-6.3 19.4-9.9 31-9.9H166c7 0 12.7 5.7 12.7 12.7S173 52.5 166 52.5h-19.7c-17.1 0-31 13.9-31 31V119H90V65c0 29.8-24.2 54-54 54Z" fill="url(#markGradient)" transform="translate(12 27) scale(.82)"/>
-    <path d="M55 75.6V51.4c0-5.4 6.1-8.5 10.5-5.4l17.3 12.1c3.8 2.7 3.8 8.3 0 11L65.5 81.2C61.1 84.2 55 81 55 75.6Z" fill="#050814"/>
-    <rect x="111" y="78" width="9" height="32" rx="4.5" fill="url(#markGradient)"/>
-    <rect x="128" y="63" width="9" height="57" rx="4.5" fill="url(#markGradient)"/>
-    <rect x="145" y="84" width="9" height="38" rx="4.5" fill="url(#markGradient)"/>
-  </g>
+
+  <rect x="8" y="8" width="144" height="144" rx="34" fill="url(#panel)"/>
+  <rect x="8" y="8" width="144" height="144" rx="34" stroke="url(#g)" stroke-opacity=".38" stroke-width="2"/>
+  <text
+    x="80"
+    y="101"
+    text-anchor="middle"
+    fill="url(#g)"
+    font-family="Inter, Avenir, Helvetica, Arial, sans-serif"
+    font-size="74"
+    font-weight="850"
+    letter-spacing="-10"
+  >ef</text>
+  <circle cx="125" cy="43" r="7" fill="#25f4d0"/>
 </svg>

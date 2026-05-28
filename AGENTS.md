@@ -119,6 +119,7 @@ Phase 22: modernized logo lockup and app color system.
 - Replaced text-only brand labels in the sign-in screen, sidebar, and hero header with the logo lockup.
 - Replaced the squeezed full-logo usage with a compact mark plus live wordmark so the brand scales cleanly in sidebars and headers.
 - Shifted the app color system from beige/green to navy, electric blue, cyan, and purple to match the EnsembleFlow mark.
+- Simplified the small app mark to a readable `ef` monogram because the more detailed music/play symbol was still too muddy at sidebar size.
 
 ## What Still Needs To Happen
 
