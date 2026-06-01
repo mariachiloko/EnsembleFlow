@@ -3631,16 +3631,17 @@ function App() {
       </aside>
 
       <div className="workspace">
+        <div className="workspace-toolbar">
+          <button className="button button-secondary inbox-button" type="button" onClick={openInbox}>
+            <span aria-hidden="true">✉</span>
+            <span>Inbox</span>
+            {unreadInboxCount ? <span className="inbox-badge">{unreadInboxCount}</span> : null}
+          </button>
+        </div>
+
         <section className="hero" id="overview">
           <div className="hero-topline">
             <BrandLogo compact />
-            <div className="hero-top-actions">
-              <button className="button button-secondary inbox-button" type="button" onClick={openInbox}>
-                <span aria-hidden="true">✉</span>
-                <span>Inbox</span>
-                {unreadInboxCount ? <span className="inbox-badge">{unreadInboxCount}</span> : null}
-              </button>
-            </div>
           </div>
           <div className="hero-grid hero-grid-main">
             <div>
