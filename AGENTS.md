@@ -113,7 +113,6 @@ Phase 23: public frontend hosting and live deployment.
 - Moved section placement into the opened director ensemble screen so a director can assign approved members without leaving the ensemble context.
 - Filtered join requests to pending-only so already-handled requests do not keep showing an approve button.
 - Added director member-detail views with missing assignments, submissions, remove/block actions, and direct messaging.
-- Added a director-side inbox for conversations in the opened ensemble while keeping member conversations scoped to their assigned section.
 - Updated conversation loading so directors can load ensemble conversations and members still load only section conversations.
 - Added membership profile-label enrichment so rosters can show display name or username instead of raw Cognito user IDs.
 - Added frontend member-name fallbacks so old records still render cleanly if a member has not saved a profile yet.
@@ -122,9 +121,8 @@ Phase 23: public frontend hosting and live deployment.
 - Added a selected-submission detail window for assignments so users can open a submission, see notes and video, add comments, review it, or delete it without juggling ID dropdowns.
 - Added a member-facing submissions list so members can reopen their own uploads and delete them from the same detail window.
 - Added a DELETE /submissions API route and enriched submission records with owner display labels so the UI can stay name-first.
-- Added a header inbox drawer with conversation avatars, participant names, and a private chat view so messages are easy to reach from anywhere in the app.
 - Added a compact submission video preview that opens the player in its own pop-up viewer instead of stretching the review panel.
-- Moved the inbox button directly into the signed-in avatar row so it stays beside the profile picture and is immediately visible.
+- Removed the separate inbox drawer and profile-card inbox button after deciding to keep messaging inside the section and ensemble views only.
 - Changed frontend deployment so `index.html` is served with no-cache headers while assets stay long-lived cached.
 - Added the EnsembleFlow logo as a frontend SVG asset and favicon.
 - Replaced text-only brand labels in the sign-in screen, sidebar, and hero header with the logo lockup.
@@ -141,7 +139,6 @@ Phase 23: public frontend hosting and live deployment.
 - Added `scripts/deploy_frontend.sh` to build the Vite app from Terraform outputs, upload to S3, and invalidate CloudFront.
 - Deployed the frontend publicly at the current CloudFront URL.
 - Added an auth-loading gate so the app waits for session resolution before showing sign-in or workspace content.
-- Moved the inbox control directly into the signed-in avatar row so it sits beside the profile picture and avoids layout wrapping.
 
 ## What Still Needs To Happen
 
@@ -163,13 +160,11 @@ Phase 23: public frontend hosting and live deployment.
 - Verify the public frontend now opens the director dashboard consistently after a valid director sign-in.
 - Verify the public account avatar still renders the uploaded profile photo after sign-out and sign-in.
 - Verify section placement from the opened director ensemble screen with a real approved member.
-- Verify direct member messages appear in both the director inbox and the member's section-scoped inbox.
+- Verify direct member messages appear in both the director and member section conversation views.
 - Refresh AWS credentials and rerun Terraform apply; the first deploy attempt for profile-label enrichment failed because the AWS SSO token was expired.
 - Verify rosters and message sender labels show member display names/usernames after the backend deploy.
 - Verify the submission video preview opens a focused pop-up player and stays compact in the surrounding review panel.
-- Verify the inbox button is visible in the signed-in profile card action row in the live browser after refresh.
 - Verify `index.html` is not stuck behind browser or edge cache after the deploy script change.
-- Verify the signed-in workspace inbox button once a real authenticated browser session is open. The browser session inspectable in this thread is currently on the sign-in screen, so the workspace inbox could not be rechecked from that view.
 - Decide later if a transparent PNG export is needed for app store/social/portfolio mockups.
 - Review the updated dark/light branding in the browser and tune spacing if the mark should be larger or smaller.
 - Replace the CloudFront URL with a custom domain later if a cleaner share link is wanted.
