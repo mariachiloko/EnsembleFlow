@@ -60,11 +60,6 @@ const placeholderProfile = {
   photoKey: "",
 };
 
-const localDirectorEmail =
-  typeof import.meta.env.VITE_DIRECTOR_EMAIL === "string"
-    ? import.meta.env.VITE_DIRECTOR_EMAIL.trim().toLowerCase()
-    : "";
-
 function decodeJwtPayload(token?: string) {
   if (!token) {
     return {};
@@ -464,16 +459,13 @@ function App() {
         }
 
         const requestedPortal = loadRequestedPortal();
-        const localDirectorMatch = Boolean(
-          localDirectorEmail && (sessionClaims.email || "").trim().toLowerCase() === localDirectorEmail,
-        );
-        setIsDirectorAccount(Boolean(profileResponse.isDirectorAccount || localDirectorMatch));
-        if (requestedPortal === "director" && !(profileResponse.isDirectorAccount || localDirectorMatch)) {
-          setPortalMode("member");
+        const directorApproved = Boolean(profileResponse.isDirectorAccount);
+        setIsDirectorAccount(directorApproved);
+        setPortalMode(requestedPortal);
+        if (requestedPortal === "director" && !directorApproved) {
           setAuthMessage("This email is not approved for director access.");
           setFormMessage("Director access is limited to approved email addresses.");
         } else {
-          setPortalMode(requestedPortal);
           setAuthMessage("Signed in.");
         }
 
@@ -824,8 +816,7 @@ function App() {
   const selectedDirectorMemberMissingAssignments = selectedDirectorMemberAssignments.filter(
     (assignment) => !selectedDirectorMemberSubmittedAssignmentIds.has(assignment.assignmentId),
   );
-  const isDirectorMode =
-    portalMode === "director" && (isDirectorAccount || signedInEmailNormalized === localDirectorEmail);
+  const isDirectorMode = portalMode === "director" && isDirectorAccount;
   const selectedMemberAssignments = selectedDirectorEnsemble
     ? visibleAssignments.filter((assignment) => assignment.ensembleId === selectedDirectorEnsemble.ensembleId)
     : [];
