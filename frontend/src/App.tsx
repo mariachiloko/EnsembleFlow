@@ -371,6 +371,7 @@ function App() {
   const [selectedDirectorSubmissionId, setSelectedDirectorSubmissionId] = useState("");
   const [selectedSubmissionVideoUrl, setSelectedSubmissionVideoUrl] = useState("");
   const [selectedSubmissionCommentsOpen, setSelectedSubmissionCommentsOpen] = useState(false);
+  const [selectedSubmissionVideoOpen, setSelectedSubmissionVideoOpen] = useState(false);
   const [submissionAssignmentId, setSubmissionAssignmentId] = useState("");
   const [submissionNotes, setSubmissionNotes] = useState("");
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
@@ -1331,11 +1332,23 @@ function App() {
     setSelectedDirectorAssignmentId(submission?.assignmentId || selectedDirectorAssignmentId);
     setCommentSubmissionId(submissionId);
     setReviewSubmissionId(submissionId);
+    setSelectedSubmissionVideoOpen(false);
     setSelectedSubmissionCommentsOpen(true);
   }
 
   function closeSubmissionInspector() {
     setSelectedSubmissionCommentsOpen(false);
+    setSelectedSubmissionVideoOpen(false);
+  }
+
+  function openSubmissionVideoViewer() {
+    if (selectedSubmissionVideoUrl) {
+      setSelectedSubmissionVideoOpen(true);
+    }
+  }
+
+  function closeSubmissionVideoViewer() {
+    setSelectedSubmissionVideoOpen(false);
   }
 
   function openConversation(conversationId: string) {
@@ -1891,6 +1904,7 @@ function App() {
       setSubmissionNotes("");
       setMemberView("ensemble");
       setSelectedSubmissionCommentsOpen(false);
+      setSelectedSubmissionVideoOpen(false);
       await reloadNotifications();
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "Submission save failed.");
@@ -2979,7 +2993,24 @@ function App() {
                         <article className="panel">
                           <h3>Video</h3>
                           {selectedSubmissionVideoUrl ? (
-                            <video controls src={selectedSubmissionVideoUrl} className="submission-video" />
+                            <button
+                              className="submission-video-preview"
+                              type="button"
+                              onClick={openSubmissionVideoViewer}
+                              aria-label="Open submission video"
+                            >
+                              <video
+                                className="submission-video-preview-frame"
+                                src={selectedSubmissionVideoUrl}
+                                muted
+                                playsInline
+                                preload="metadata"
+                              />
+                              <span className="submission-video-preview-copy">
+                                <strong>Open video</strong>
+                                <span>Click to view in a larger pop-up</span>
+                              </span>
+                            </button>
                           ) : (
                             <p className="muted-copy">No video uploaded.</p>
                           )}
@@ -3329,7 +3360,24 @@ function App() {
               <article className="panel">
                 <h3>Video</h3>
                 {selectedSubmissionVideoUrl ? (
-                  <video controls src={selectedSubmissionVideoUrl} className="submission-video" />
+                  <button
+                    className="submission-video-preview"
+                    type="button"
+                    onClick={openSubmissionVideoViewer}
+                    aria-label="Open submission video"
+                  >
+                    <video
+                      className="submission-video-preview-frame"
+                      src={selectedSubmissionVideoUrl}
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                    <span className="submission-video-preview-copy">
+                      <strong>Open video</strong>
+                      <span>Click to view in a larger pop-up</span>
+                    </span>
+                  </button>
                 ) : (
                   <p className="muted-copy">No video uploaded.</p>
                 )}
@@ -3375,6 +3423,28 @@ function App() {
                   <p>Select a submission to see the thread.</p>
                 </article>
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedSubmissionVideoOpen && selectedSubmissionVideoUrl ? (
+        <div className="modal-backdrop video-backdrop" role="presentation" onClick={closeSubmissionVideoViewer}>
+          <div className="panel form-panel modal-panel video-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="section-header">
+              <div>
+                <h2>Submission video</h2>
+                <p className="muted-copy">{selectedSubmissionAssignment?.title || "Video preview"}</p>
+              </div>
+              <div className="form-actions">
+                <button className="button button-secondary" type="button" onClick={closeSubmissionVideoViewer}>
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="submission-video-stage">
+              <video controls autoPlay src={selectedSubmissionVideoUrl} className="submission-video-full" />
             </div>
           </div>
         </div>

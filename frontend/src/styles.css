@@ -408,6 +408,69 @@ ul {
   margin: 0;
 }
 
+.video-backdrop {
+  z-index: 60;
+}
+
+.video-modal {
+  width: min(100%, 960px);
+}
+
+.submission-video-preview {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  padding: 0;
+  background: rgba(6, 10, 24, 0.92);
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  gap: 0;
+  text-align: left;
+  box-shadow: var(--shadow);
+}
+
+.submission-video-preview:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-2) 72%, white);
+  outline-offset: 2px;
+}
+
+.submission-video-preview-frame {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: linear-gradient(135deg, rgba(47, 124, 255, 0.22), rgba(37, 244, 208, 0.16));
+}
+
+.submission-video-preview-copy {
+  padding: 12px 14px 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.submission-video-preview-copy strong {
+  font-size: 0.98rem;
+}
+
+.submission-video-preview-copy span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.submission-video-stage {
+  display: grid;
+  gap: 12px;
+}
+
+.submission-video-full {
+  width: 100%;
+  max-height: min(72vh, 720px);
+  border-radius: 18px;
+  background: #000;
+}
+
 .inbox-backdrop {
   z-index: 50;
   align-items: stretch;
