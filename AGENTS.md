@@ -144,6 +144,7 @@ Phase 23: public frontend hosting and live deployment.
 - Deployed the frontend publicly at the current CloudFront URL.
 - Added an auth-loading gate so the app waits for session resolution before showing sign-in or workspace content.
 - Moved the inbox control into the signed-in hero header row so it is visible immediately in the workspace layout.
+- Moved the inbox control into the signed-in profile card beside the avatar and account actions so it is easier to find.
 
 ## What Still Needs To Happen
 
@@ -174,6 +175,7 @@ Phase 23: public frontend hosting and live deployment.
 - Verify the fixed floating inbox button appears in the live browser after a fresh deploy.
 - Verify `index.html` is not stuck behind browser or edge cache after the deploy script change.
 - Verify the signed-in workspace inbox button once a real authenticated browser session is open. The browser session inspectable in this thread is currently on the sign-in screen, so the workspace inbox could not be rechecked from that view.
+- Verify the inbox button now appears inside the signed-in profile card next to the avatar and account actions after the next browser refresh.
 - Decide later if a transparent PNG export is needed for app store/social/portfolio mockups.
 - Review the updated dark/light branding in the browser and tune spacing if the mark should be larger or smaller.
 - Replace the CloudFront URL with a custom domain later if a cleaner share link is wanted.

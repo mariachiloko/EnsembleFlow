@@ -230,12 +230,6 @@ ul {
   margin-bottom: 16px;
 }
 
-.hero-topline-actions {
-  display: flex;
-  justify-content: flex-end;
-  flex: 1;
-}
-
 .topline-statuses {
   display: flex;
   gap: 10px;
@@ -293,6 +287,14 @@ ul {
   gap: 18px;
 }
 
+.account-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .account-copy {
   display: grid;
   gap: 8px;
@@ -300,8 +302,10 @@ ul {
 
 .account-actions {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 12px;
-  flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .inbox-button {

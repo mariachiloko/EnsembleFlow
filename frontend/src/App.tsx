@@ -3652,13 +3652,6 @@ function App() {
         <section className="hero" id="overview">
           <div className="hero-topline">
             <BrandLogo compact />
-            <div className="hero-topline-actions">
-              <button className="button button-secondary inbox-button" type="button" onClick={openInbox}>
-                <span aria-hidden="true">✉</span>
-                <span>Inbox</span>
-                {unreadInboxCount ? <span className="inbox-badge">{unreadInboxCount}</span> : null}
-              </button>
-            </div>
           </div>
           <div className="hero-grid hero-grid-main">
             <div>
@@ -3682,8 +3675,23 @@ function App() {
 
           <div className="card-grid dashboard-grid">
             <article className="panel account-card">
-              <div className="avatar-circle" aria-hidden="true">
-                {profilePhotoUrl ? <img className="avatar-image" src={profilePhotoUrl} alt="" /> : avatarInitials}
+              <div className="account-card-top">
+                <div className="avatar-circle" aria-hidden="true">
+                  {profilePhotoUrl ? <img className="avatar-image" src={profilePhotoUrl} alt="" /> : avatarInitials}
+                </div>
+                <div className="account-actions">
+                  <button className="button button-secondary inbox-button" type="button" onClick={openInbox}>
+                    <span aria-hidden="true">✉</span>
+                    <span>Inbox</span>
+                    {unreadInboxCount ? <span className="inbox-badge">{unreadInboxCount}</span> : null}
+                  </button>
+                  <button className="button button-primary" type="button" onClick={openProfileEditor}>
+                    Edit profile photo
+                  </button>
+                  <button className="button button-secondary" type="button" onClick={handleSignOut}>
+                    Sign out
+                  </button>
+                </div>
               </div>
               <div className="account-copy">
                 <p className="eyebrow">Signed in</p>
@@ -3692,14 +3700,6 @@ function App() {
                   {signedInEmail ? signedInEmail : "Your email comes from sign-in."}
                 </p>
                 {signedInUsername ? <p className="muted-copy">@{signedInUsername}</p> : null}
-              </div>
-              <div className="account-actions">
-                <button className="button button-primary" type="button" onClick={openProfileEditor}>
-                  Edit profile photo
-                </button>
-                <button className="button button-secondary" type="button" onClick={handleSignOut}>
-                  Sign out
-                </button>
               </div>
             </article>
 
