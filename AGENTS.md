@@ -83,6 +83,7 @@ Phase 23: public frontend hosting and live deployment.
 - Added a local-only director email hint for the browser UI so the director portal opens consistently on this machine.
 - Added a build-time director email injection path for the public frontend so the approved director portal can be built without committing private email data.
 - Kept the requested portal mode active immediately after Cognito callback so a valid director login does not momentarily or later fall back to member mode.
+- Added profile-photo rendering in the account avatar so a saved upload appears in the live UI after refresh.
 - Hid ensemble-specific director navigation until an ensemble is selected so the home view only shows ensemble creation and the list of ensembles.
 - Removed visible API/auth status chips from the signed-in layout so the UI stays product-focused instead of showing backend status.
 - Reduced the director sidebar to product navigation only, with ensemble drill-down kept inside the selected ensemble screen.
@@ -149,6 +150,7 @@ Phase 23: public frontend hosting and live deployment.
 - Verify the director section roster and ensemble roster read cleanly in the browser.
 - Verify director sign-in after being away shows the intended email/account instead of reusing a stale member session.
 - Verify the public frontend now opens the director dashboard consistently after a valid director sign-in.
+- Verify the public account avatar still renders the uploaded profile photo after sign-out and sign-in.
 - Verify section placement from the opened director ensemble screen with a real approved member.
 - Verify direct member messages appear in both the director inbox and the member's section-scoped inbox.
 - Refresh AWS credentials and rerun Terraform apply; the first deploy attempt for profile-label enrichment failed because the AWS SSO token was expired.

@@ -302,6 +302,7 @@ ul {
   width: 72px;
   height: 72px;
   border-radius: 50%;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -317,6 +318,13 @@ ul {
   width: 88px;
   height: 88px;
   font-size: 1.85rem;
+}
+
+.avatar-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .profile-hero {

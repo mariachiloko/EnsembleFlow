@@ -159,6 +159,7 @@ function App() {
     accessCode?: string;
   }>>([]);
   const [ensembleLogoUrls, setEnsembleLogoUrls] = useState<Record<string, string>>({});
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [remoteSections, setRemoteSections] = useState<Array<{
     sectionId: string;
     ensembleId: string;
@@ -573,6 +574,34 @@ function App() {
       cancelled = true;
     };
   }, [accessToken, remoteEnsembles]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfilePhoto() {
+      if (!accessToken || !profile.photoKey) {
+        setProfilePhotoUrl("");
+        return;
+      }
+
+      try {
+        const result = await getUploadUrl(accessToken, profile.photoKey);
+        if (!cancelled) {
+          setProfilePhotoUrl(result.url);
+        }
+      } catch {
+        if (!cancelled) {
+          setProfilePhotoUrl("");
+        }
+      }
+    }
+
+    void loadProfilePhoto();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, profile.photoKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1834,7 +1863,7 @@ function App() {
             <div className="card-grid dashboard-grid">
               <article className="panel account-card">
                 <div className="avatar-circle" aria-hidden="true">
-                  {avatarInitials}
+                  {profilePhotoUrl ? <img className="avatar-image" src={profilePhotoUrl} alt="" /> : avatarInitials}
                 </div>
                 <div className="account-copy">
                   <p className="eyebrow">Signed in</p>
@@ -2772,7 +2801,7 @@ function App() {
 
               <div className="profile-hero">
                 <div className="avatar-circle avatar-circle-large" aria-hidden="true">
-                  {avatarInitials}
+                  {profilePhotoUrl ? <img className="avatar-image" src={profilePhotoUrl} alt="" /> : avatarInitials}
                 </div>
                 <div>
                   <h3>{signedInName}</h3>
@@ -2950,7 +2979,7 @@ function App() {
           <div className="card-grid dashboard-grid">
             <article className="panel account-card">
               <div className="avatar-circle" aria-hidden="true">
-                {avatarInitials}
+                {profilePhotoUrl ? <img className="avatar-image" src={profilePhotoUrl} alt="" /> : avatarInitials}
               </div>
               <div className="account-copy">
                 <p className="eyebrow">Signed in</p>
@@ -3879,7 +3908,7 @@ function App() {
 
             <div className="profile-hero">
               <div className="avatar-circle avatar-circle-large" aria-hidden="true">
-                {avatarInitials}
+                {profilePhotoUrl ? <img className="avatar-image" src={profilePhotoUrl} alt="" /> : avatarInitials}
               </div>
               <div>
                 <h3>{signedInName}</h3>
