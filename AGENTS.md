@@ -119,6 +119,9 @@ Phase 23: public frontend hosting and live deployment.
 - Added frontend member-name fallbacks so old records still render cleanly if a member has not saved a profile yet.
 - Added the Lambda `BatchGetItem` permission needed to load profile labels for roster membership lists.
 - Removed remaining raw section and assignment ID labels from the UI so member and director screens stay name-first.
+- Added a selected-submission detail window for assignments so users can open a submission, see notes and video, add comments, review it, or delete it without juggling ID dropdowns.
+- Added a member-facing submissions list so members can reopen their own uploads and delete them from the same detail window.
+- Added a DELETE /submissions API route and enriched submission records with owner display labels so the UI can stay name-first.
 - Added the EnsembleFlow logo as a frontend SVG asset and favicon.
 - Replaced text-only brand labels in the sign-in screen, sidebar, and hero header with the logo lockup.
 - Replaced the squeezed full-logo usage with a compact mark plus live wordmark so the brand scales cleanly in sidebars and headers.

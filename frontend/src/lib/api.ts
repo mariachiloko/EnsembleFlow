@@ -461,6 +461,8 @@ export async function listSubmissionsWithScope(
       submissionId: string;
       assignmentId: string;
       ownerId: string;
+      ownerUsername: string;
+      ownerDisplayName: string;
       ensembleId: string;
       sectionId: string;
       videoKey: string;
@@ -480,6 +482,8 @@ export async function createSubmission(token: string, payload: SubmissionPayload
       submissionId: string;
       assignmentId: string;
       ownerId: string;
+      ownerUsername: string;
+      ownerDisplayName: string;
       ensembleId: string;
       sectionId: string;
       videoKey: string;
@@ -507,6 +511,8 @@ export async function updateSubmission(
       submissionId: string;
       assignmentId: string;
       ownerId: string;
+      ownerUsername: string;
+      ownerDisplayName: string;
       ensembleId: string;
       sectionId: string;
       videoKey: string;
@@ -524,12 +530,21 @@ export async function updateSubmission(
   });
 }
 
+export async function deleteSubmission(token: string, submissionId: string) {
+  return request<{ ok: boolean }>(`/submissions/${encodeURIComponent(submissionId)}`, {
+    token,
+    method: "DELETE",
+  });
+}
+
 export async function listComments(token: string, submissionId: string) {
   return request<{
     comments: Array<{
       commentId: string;
       submissionId: string;
       authorId: string;
+      authorUsername: string;
+      authorDisplayName: string;
       body: string;
       createdAt: string;
       updatedAt: string;
@@ -543,6 +558,8 @@ export async function createComment(token: string, payload: CommentPayload) {
       commentId: string;
       submissionId: string;
       authorId: string;
+      authorUsername: string;
+      authorDisplayName: string;
       body: string;
       createdAt: string;
       updatedAt: string;

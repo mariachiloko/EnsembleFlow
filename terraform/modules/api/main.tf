@@ -203,6 +203,7 @@ locals {
     "POST /submissions"                      = {}
     "GET /submissions/{submissionId}"        = {}
     "PUT /submissions/{submissionId}"        = {}
+    "DELETE /submissions/{submissionId}"     = {}
     "GET /comments"                          = {}
     "POST /comments"                         = {}
     "GET /conversations"                     = {}

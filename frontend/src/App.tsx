@@ -11,6 +11,7 @@ import {
   getEnsemble,
   createSection,
   createSubmission,
+  deleteSubmission,
   createUploadPresign,
   getUploadUrl,
   approveJoinRequest,
@@ -108,6 +109,50 @@ function getMemberDisplayName(member: { userId: string; username?: string; displ
   }
 
   return "Unknown member";
+}
+
+function getSubmissionOwnerLabel(submission: {
+  ownerId: string;
+  ownerUsername?: string;
+  ownerDisplayName?: string;
+}) {
+  const displayName = submission.ownerDisplayName?.trim();
+  if (displayName) {
+    return displayName;
+  }
+
+  const username = submission.ownerUsername?.trim();
+  if (username) {
+    return `@${username}`;
+  }
+
+  return "Unknown member";
+}
+
+function getProfileLabel(profile?: { username?: string; displayName?: string } | null) {
+  const displayName = profile?.displayName?.trim();
+  if (displayName) {
+    return displayName;
+  }
+
+  const username = profile?.username?.trim();
+  if (username) {
+    return `@${username}`;
+  }
+
+  return "Unknown member";
+}
+
+function getSubmissionStatusLabel(status?: string) {
+  switch (String(status || "pending")) {
+    case "approved":
+      return "Approved";
+    case "needs_work":
+      return "Needs work";
+    case "pending":
+    default:
+      return "Awaiting review";
+  }
 }
 
 function BrandLogo({ compact = false }: { compact?: boolean }) {
@@ -233,6 +278,8 @@ function App() {
     submissionId: string;
     assignmentId: string;
     ownerId: string;
+    ownerUsername: string;
+    ownerDisplayName: string;
     ensembleId: string;
     sectionId: string;
     videoKey: string;
@@ -292,6 +339,9 @@ function App() {
   const [assignmentSectionId, setAssignmentSectionId] = useState("");
   const [selectedDirectorSectionId, setSelectedDirectorSectionId] = useState("");
   const [selectedDirectorAssignmentId, setSelectedDirectorAssignmentId] = useState("");
+  const [selectedDirectorSubmissionId, setSelectedDirectorSubmissionId] = useState("");
+  const [selectedSubmissionVideoUrl, setSelectedSubmissionVideoUrl] = useState("");
+  const [selectedSubmissionCommentsOpen, setSelectedSubmissionCommentsOpen] = useState(false);
   const [submissionAssignmentId, setSubmissionAssignmentId] = useState("");
   const [submissionNotes, setSubmissionNotes] = useState("");
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
@@ -704,6 +754,38 @@ function App() {
   useEffect(() => {
     let cancelled = false;
 
+    async function loadSelectedSubmissionVideo() {
+      const selected = remoteSubmissions.find(
+        (submission) => submission.submissionId === selectedDirectorSubmissionId,
+      );
+
+      if (!accessToken || !selected?.videoKey) {
+        setSelectedSubmissionVideoUrl("");
+        return;
+      }
+
+      try {
+        const result = await getUploadUrl(accessToken, selected.videoKey);
+        if (!cancelled) {
+          setSelectedSubmissionVideoUrl(result.url);
+        }
+      } catch {
+        if (!cancelled) {
+          setSelectedSubmissionVideoUrl("");
+        }
+      }
+    }
+
+    void loadSelectedSubmissionVideo();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, remoteSubmissions, selectedDirectorSubmissionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     async function loadJoinRequests() {
       const selectedEnsemble = remoteEnsembles.find(
         (ensemble) => ensemble.ensembleId === structureEnsembleId,
@@ -796,9 +878,7 @@ function App() {
     return membership ? getMemberDisplayName(membership) : "Unknown member";
   };
   const selectedSubmission =
-    visibleSubmissions.find((submission) => submission.submissionId === commentSubmissionId) ||
-    visibleSubmissions[0] ||
-    null;
+    visibleSubmissions.find((submission) => submission.submissionId === selectedDirectorSubmissionId) || null;
   const selectedDirectorEnsemble =
     displayedEnsembles.find((ensemble) => ensemble.ensembleId === structureEnsembleId) || null;
   const selectedDirectorSection =
@@ -810,6 +890,8 @@ function App() {
     activeMemberships.find((membership) => membership.userId === selectedDirectorMemberId) || null;
   const selectedDirectorAssignment =
     visibleAssignments.find((assignment) => assignment.assignmentId === selectedDirectorAssignmentId) || null;
+  const selectedSubmissionAssignment =
+    visibleAssignments.find((assignment) => assignment.assignmentId === selectedDirectorSubmissionId) || null;
   const selectedSectionAssignments = selectedDirectorSection
     ? visibleAssignments.filter(
         (assignment) =>
@@ -881,6 +963,13 @@ function App() {
         (assignment) =>
           assignment.ensembleId === selectedDirectorEnsemble.ensembleId &&
           (!assignment.sectionId || assignment.sectionId === selectedMemberSection?.sectionId),
+      )
+    : [];
+  const memberSubmissions = !isDirectorMode && selectedDirectorEnsemble
+    ? visibleSubmissions.filter(
+        (submission) =>
+          submission.ownerId === profile.userId &&
+          submission.ensembleId === selectedDirectorEnsemble.ensembleId,
       )
     : [];
   const memberSubmittedAssignmentIds = new Set(
@@ -1098,9 +1187,24 @@ function App() {
     setAssignmentSectionId(assignment?.sectionId || "");
     setSelectedDirectorAssignmentId(assignmentId);
     const submission = remoteSubmissions.find((item) => item.assignmentId === assignmentId) || null;
+    setSelectedDirectorSubmissionId(submission?.submissionId || "");
     setCommentSubmissionId(submission?.submissionId || "");
     setReviewSubmissionId(submission?.submissionId || "");
+    setSelectedSubmissionCommentsOpen(false);
     setDirectorView("assignment");
+  }
+
+  function openSubmissionInspector(submissionId: string) {
+    const submission = remoteSubmissions.find((item) => item.submissionId === submissionId);
+    setSelectedDirectorSubmissionId(submissionId);
+    setSelectedDirectorAssignmentId(submission?.assignmentId || selectedDirectorAssignmentId);
+    setCommentSubmissionId(submissionId);
+    setReviewSubmissionId(submissionId);
+    setSelectedSubmissionCommentsOpen(true);
+  }
+
+  function closeSubmissionInspector() {
+    setSelectedSubmissionCommentsOpen(false);
   }
 
   function openDirectorAnnouncements(ensembleId: string) {
@@ -1622,11 +1726,14 @@ function App() {
       });
 
       setRemoteSubmissions((current) => [result.submission, ...current]);
+      setSelectedDirectorSubmissionId(result.submission.submissionId);
       setCommentSubmissionId(result.submission.submissionId);
       setReviewSubmissionId(result.submission.submissionId);
       setFormMessage("Submission saved.");
       setSubmissionFile(null);
       setSubmissionNotes("");
+      setMemberView("ensemble");
+      setSelectedSubmissionCommentsOpen(false);
       await reloadNotifications();
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "Submission save failed.");
@@ -1693,6 +1800,38 @@ function App() {
       await reloadNotifications();
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "Comment save failed.");
+    } finally {
+      setFormBusy(false);
+    }
+  }
+
+  async function handleDeleteSubmission(submissionId: string) {
+    const submission = remoteSubmissions.find((item) => item.submissionId === submissionId);
+    if (!submission) {
+      return;
+    }
+
+    if (!window.confirm("Delete this submission? This cannot be undone.")) {
+      return;
+    }
+
+    setFormBusy(true);
+    setFormMessage("Deleting submission...");
+
+    try {
+      await deleteSubmission(accessToken, submissionId);
+      setRemoteSubmissions((current) => current.filter((item) => item.submissionId !== submissionId));
+      setRemoteComments((current) => current.filter((comment) => comment.submissionId !== submissionId));
+      setSelectedDirectorSubmissionId((current) => (current === submissionId ? "" : current));
+      setCommentSubmissionId((current) => (current === submissionId ? "" : current));
+      setReviewSubmissionId((current) => (current === submissionId ? "" : current));
+      setSelectedSubmissionCommentsOpen(false);
+      setFormMessage("Submission deleted.");
+      if (!isDirectorMode) {
+        setMemberView("ensemble");
+      }
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Submission delete failed.");
     } finally {
       setFormBusy(false);
     }
@@ -2249,8 +2388,8 @@ function App() {
                             selectedDirectorMemberSubmissions.map((submission) => (
                               <article className="ensemble-row panel" key={submission.submissionId}>
                                 <div>
-                                  <p className="ensemble-role">Assignment: {submission.assignmentId}</p>
-                                  <h3>{submission.reviewStatus}</h3>
+                                  <p className="ensemble-role">{getSubmissionOwnerLabel(submission)}</p>
+                                  <h3>{getSubmissionStatusLabel(submission.reviewStatus)}</h3>
                                   <p className="ensemble-status">{submission.notes || "No notes yet."}</p>
                                 </div>
                                 <button
@@ -2505,7 +2644,7 @@ function App() {
                   {selectedSectionAssignments.length ? selectedSectionAssignments.map((assignment) => (
                     <article className="ensemble-row panel" key={assignment.assignmentId}>
                       <div>
-                        <p className="ensemble-role">Assignment ID: {assignment.assignmentId}</p>
+                        <p className="ensemble-role">{assignment.sectionId ? "Section assignment" : "Whole ensemble assignment"}</p>
                         <h3>{assignment.title}</h3>
                         <p className="ensemble-status">{assignment.description || "No description yet."}</p>
                       </div>
@@ -2522,8 +2661,8 @@ function App() {
                   {selectedSectionSubmissions.length ? selectedSectionSubmissions.map((submission) => (
                     <article className="ensemble-row panel" key={submission.submissionId}>
                       <div>
-                        <p className="ensemble-role">Submission: {submission.submissionId}</p>
-                        <h3>{submission.reviewStatus}</h3>
+                        <p className="ensemble-role">{getSubmissionOwnerLabel(submission)}</p>
+                        <h3>{getSubmissionStatusLabel(submission.reviewStatus)}</h3>
                         <p className="ensemble-status">{submission.notes || "No notes yet."}</p>
                       </div>
                       <button className="button button-secondary" type="button" onClick={() => {
@@ -2600,7 +2739,7 @@ function App() {
                         .map((assignment) => (
                           <article className="ensemble-row panel" key={assignment.assignmentId}>
                             <div>
-                              <p className="ensemble-role">{assignment.sectionId ? `Section: ${assignment.sectionId}` : "Whole ensemble"}</p>
+                              <p className="ensemble-role">{assignment.sectionId ? "Section assignment" : "Whole ensemble assignment"}</p>
                               <h3>{assignment.title}</h3>
                               <p className="ensemble-status">{assignment.description || "No description yet."}</p>
                             </div>
@@ -2634,17 +2773,17 @@ function App() {
                   {selectedAssignmentSubmissions.length ? selectedAssignmentSubmissions.map((submission) => (
                     <article className="ensemble-row panel" key={submission.submissionId}>
                       <div>
-                        <p className="ensemble-role">Submission: {submission.submissionId}</p>
-                        <h3>{submission.reviewStatus}</h3>
+                        <p className="ensemble-role">{getSubmissionOwnerLabel(submission)}</p>
+                        <h3>{getSubmissionStatusLabel(submission.reviewStatus)}</h3>
                         <p className="ensemble-status">{submission.notes || "No notes yet."}</p>
-                        <p className="ensemble-role">Section: {submission.sectionId || "unassigned"}</p>
                       </div>
                       <div className="form-actions">
-                        <button className="button button-secondary" type="button" onClick={() => {
-                          setCommentSubmissionId(submission.submissionId);
-                          setReviewSubmissionId(submission.submissionId);
-                        }}>
-                          Comments
+                        <button
+                          className="button button-primary"
+                          type="button"
+                          onClick={() => openSubmissionInspector(submission.submissionId)}
+                        >
+                          Open submission
                         </button>
                       </div>
                     </article>
@@ -2653,76 +2792,106 @@ function App() {
                   )}
                 </div>
 
-                <div className="auth-grid">
-                  <form className="panel form-panel" onSubmit={handleCommentSubmit}>
-                    <h3>Add comment</h3>
-                    <label className="field">
-                      <span>Submission</span>
-                      <select value={commentSubmissionId} onChange={(event) => setCommentSubmissionId(event.target.value)}>
-                        <option value="">Choose submission</option>
-                        {selectedAssignmentSubmissions.map((submission) => (
-                          <option key={submission.submissionId} value={submission.submissionId}>{submission.submissionId}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Comment</span>
-                      <textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="Leave a note with text or emojis" rows={4} />
-                    </label>
-                    <div className="form-actions">
-                      <button className="button button-primary" type="submit" disabled={formBusy}>Save comment</button>
-                    </div>
-                  </form>
+                {selectedSubmissionCommentsOpen && selectedSubmission ? (
+                  <div className="modal-backdrop" role="presentation" onClick={closeSubmissionInspector}>
+                    <div className="panel form-panel modal-panel submission-modal" onClick={(event) => event.stopPropagation()}>
+                          <div className="section-header">
+                            <div>
+                              <h2>{getSubmissionOwnerLabel(selectedSubmission)}</h2>
+                              <p className="muted-copy">{selectedSubmissionAssignment?.title || "Submission details"}</p>
+                              <p className="muted-copy">{getSubmissionStatusLabel(selectedSubmission.reviewStatus)}</p>
+                            </div>
+                        <div className="form-actions">
+                          <button className="button button-secondary" type="button" onClick={closeSubmissionInspector}>
+                            Close
+                          </button>
+                          <button className="button button-secondary" type="button" onClick={() => handleDeleteSubmission(selectedSubmission.submissionId)}>
+                            Delete submission
+                          </button>
+                        </div>
+                      </div>
 
-                  <form className="panel form-panel" onSubmit={handleReviewSubmit}>
-                    <h3>Review</h3>
-                    <label className="field">
-                      <span>Submission</span>
-                      <select value={reviewSubmissionId} onChange={(event) => setReviewSubmissionId(event.target.value)}>
-                        <option value="">Choose submission</option>
-                        {selectedAssignmentSubmissions.map((submission) => (
-                          <option key={submission.submissionId} value={submission.submissionId}>{submission.submissionId}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Status</span>
-                      <select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}>
-                        <option value="pending">Pending</option>
-                        <option value="approved">Approved</option>
-                        <option value="needs_work">Needs work</option>
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Feedback</span>
-                      <textarea value={reviewFeedback} onChange={(event) => setReviewFeedback(event.target.value)} rows={4} />
-                    </label>
-                    <div className="form-actions">
-                      <button className="button button-primary" type="submit" disabled={formBusy}>Save review</button>
-                    </div>
-                  </form>
-                </div>
-
-                <div className="ensemble-list">
-                  {visibleComments.filter((comment) => commentSubmissionId && comment.submissionId === commentSubmissionId).length ? (
-                    visibleComments
-                      .filter((comment) => commentSubmissionId && comment.submissionId === commentSubmissionId)
-                      .map((comment) => (
-                        <article className="ensemble-row panel" key={comment.commentId}>
-                          <div>
-                            <p className="ensemble-role">Author: {comment.authorId}</p>
-                            <h3>{comment.body}</h3>
-                          </div>
-                          <p className="ensemble-role">{comment.createdAt ? new Date(comment.createdAt).toLocaleString() : "Unknown"}</p>
+                      <div className="card-grid dashboard-grid">
+                        <article className="panel">
+                          <h3>Notes</h3>
+                          <p>{selectedSubmission.notes || "No notes yet."}</p>
                         </article>
-                      ))
-                  ) : (
-                    <article className="panel">
-                      <h3>No comments yet</h3>
-                      <p>Select a submission to see the thread.</p>
-                    </article>
-                  )}
-                </div>
+                        <article className="panel">
+                          <h3>Video</h3>
+                          {selectedSubmissionVideoUrl ? (
+                            <video controls src={selectedSubmissionVideoUrl} className="submission-video" />
+                          ) : (
+                            <p className="muted-copy">No video uploaded.</p>
+                          )}
+                        </article>
+                      </div>
+
+                      <div className="auth-grid">
+                        <form className="panel form-panel" onSubmit={handleCommentSubmit}>
+                          <h3>Add comment</h3>
+                          <label className="field">
+                            <span>Comment</span>
+                            <textarea
+                              value={commentBody}
+                              onChange={(event) => setCommentBody(event.target.value)}
+                              placeholder="Leave a note with text or emojis"
+                              rows={4}
+                            />
+                          </label>
+                          <div className="form-actions">
+                            <button className="button button-primary" type="submit" disabled={formBusy}>
+                              Save comment
+                            </button>
+                          </div>
+                        </form>
+
+                        <form className="panel form-panel" onSubmit={handleReviewSubmit}>
+                          <h3>Review</h3>
+                          <label className="field">
+                            <span>Status</span>
+                            <select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}>
+                              <option value="pending">Pending</option>
+                              <option value="approved">Approved</option>
+                              <option value="needs_work">Needs work</option>
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>Feedback</span>
+                            <textarea value={reviewFeedback} onChange={(event) => setReviewFeedback(event.target.value)} rows={4} />
+                          </label>
+                          <div className="form-actions">
+                            <button className="button button-primary" type="submit" disabled={formBusy}>
+                              Save review
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+
+                      <div className="ensemble-list">
+                        {visibleComments.filter((comment) => commentSubmissionId && comment.submissionId === commentSubmissionId).length ? (
+                          visibleComments
+                            .filter((comment) => commentSubmissionId && comment.submissionId === commentSubmissionId)
+                            .map((comment) => (
+                              <article className="ensemble-row panel" key={comment.commentId}>
+                                <div>
+                                  <p className="ensemble-role">From {getMemberNameById(comment.authorId)}</p>
+                                  <h3>{comment.body}</h3>
+                                </div>
+                                <p className="ensemble-role">
+                                  {comment.createdAt ? new Date(comment.createdAt).toLocaleString() : "Unknown"}
+                                </p>
+                              </article>
+                            ))
+                        ) : (
+                          <article className="panel">
+                            <h3>No comments yet</h3>
+                            <p>Select a submission to see the thread.</p>
+                          </article>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </>
             ) : null}
 
@@ -2768,13 +2937,91 @@ function App() {
                 </div>
               </>
             ) : null}
-          </section>
+      </section>
 
-          {toastMessage ? (
-            <div className={`toast toast-${toastKind}`} role="status" aria-live="polite">
-              {toastMessage}
+      {!isDirectorMode && memberView === "assignments" && selectedSubmissionCommentsOpen && selectedSubmission ? (
+        <div className="modal-backdrop" role="presentation" onClick={closeSubmissionInspector}>
+          <div className="panel form-panel modal-panel submission-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="section-header">
+              <div>
+                <h2>{getSubmissionOwnerLabel(selectedSubmission)}</h2>
+                <p className="muted-copy">{selectedSubmissionAssignment?.title || "Submission details"}</p>
+                <p className="muted-copy">{getSubmissionStatusLabel(selectedSubmission.reviewStatus)}</p>
+              </div>
+              <div className="form-actions">
+                <button className="button button-secondary" type="button" onClick={closeSubmissionInspector}>
+                  Close
+                </button>
+                <button className="button button-secondary" type="button" onClick={() => handleDeleteSubmission(selectedSubmission.submissionId)}>
+                  Delete submission
+                </button>
+              </div>
             </div>
-          ) : null}
+
+            <div className="card-grid dashboard-grid">
+              <article className="panel">
+                <h3>Notes</h3>
+                <p>{selectedSubmission.notes || "No notes yet."}</p>
+              </article>
+              <article className="panel">
+                <h3>Video</h3>
+                {selectedSubmissionVideoUrl ? (
+                  <video controls src={selectedSubmissionVideoUrl} className="submission-video" />
+                ) : (
+                  <p className="muted-copy">No video uploaded.</p>
+                )}
+              </article>
+            </div>
+
+            <form className="panel form-panel" onSubmit={handleCommentSubmit}>
+              <h3>Add comment</h3>
+              <label className="field">
+                <span>Comment</span>
+                <textarea
+                  value={commentBody}
+                  onChange={(event) => setCommentBody(event.target.value)}
+                  placeholder="Leave a note with text or emojis"
+                  rows={4}
+                />
+              </label>
+              <div className="form-actions">
+                <button className="button button-primary" type="submit" disabled={formBusy}>
+                  Save comment
+                </button>
+              </div>
+            </form>
+
+            <div className="ensemble-list">
+              {visibleComments.filter((comment) => commentSubmissionId && comment.submissionId === commentSubmissionId).length ? (
+                visibleComments
+                  .filter((comment) => commentSubmissionId && comment.submissionId === commentSubmissionId)
+                  .map((comment) => (
+                    <article className="ensemble-row panel" key={comment.commentId}>
+                      <div>
+                        <p className="ensemble-role">From {getMemberNameById(comment.authorId)}</p>
+                        <h3>{comment.body}</h3>
+                      </div>
+                      <p className="ensemble-role">
+                        {comment.createdAt ? new Date(comment.createdAt).toLocaleString() : "Unknown"}
+                      </p>
+                    </article>
+                  ))
+              ) : (
+                <article className="panel">
+                  <h3>No comments yet</h3>
+                  <p>Select a submission to see the thread.</p>
+                </article>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {toastMessage ? (
+        <div className={`toast toast-${toastKind}`} role="status" aria-live="polite">
+          {toastMessage}
+        </div>
+      ) : null}
         </div>
 
         {profileModalOpen ? (
@@ -3448,6 +3695,45 @@ function App() {
                       </button>
                     </div>
                   </form>
+
+                  <div className="panel">
+                    <h3>My submissions</h3>
+                    <p className="muted-copy">Open a submission to review notes, video, comments, or delete it.</p>
+                    <div className="ensemble-list">
+                      {memberSubmissions.length ? (
+                        memberSubmissions.map((submission) => (
+                          <article className="ensemble-row panel" key={submission.submissionId}>
+                            <div>
+                              <p className="ensemble-role">{getSubmissionStatusLabel(submission.reviewStatus)}</p>
+                              <h3>{currentMemberAssignments.find((assignment) => assignment.assignmentId === submission.assignmentId)?.title || "Submission"}</h3>
+                              <p className="ensemble-status">{submission.notes || "No notes yet."}</p>
+                            </div>
+                            <div className="form-actions">
+                              <button
+                                className="button button-primary"
+                                type="button"
+                                onClick={() => openSubmissionInspector(submission.submissionId)}
+                              >
+                                Open submission
+                              </button>
+                              <button
+                                className="button button-secondary"
+                                type="button"
+                                onClick={() => handleDeleteSubmission(submission.submissionId)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </article>
+                        ))
+                      ) : (
+                        <article className="panel">
+                          <h3>No submissions yet</h3>
+                          <p>Your uploads will appear here after they save.</p>
+                        </article>
+                      )}
+                    </div>
+                  </div>
                 </article>
               </div>
             ) : null}

@@ -208,6 +208,8 @@ const safeSubmission = (item) =>
         submissionId: item.submissionId,
         assignmentId: item.assignmentId,
         ownerId: item.ownerId,
+        ownerUsername: item.ownerUsername ?? "",
+        ownerDisplayName: item.ownerDisplayName ?? "",
         ensembleId: item.ensembleId ?? "",
         sectionId: item.sectionId ?? "",
         videoKey: item.videoKey ?? "",
@@ -504,6 +506,41 @@ const enrichMembershipsWithProfiles = async (memberships) => {
       ...membership,
       username: profile.username || "",
       displayName: profile.displayName || "",
+    };
+  });
+};
+
+const enrichItemsWithProfiles = async (items, userIdField = "ownerId", profileFieldPrefix = "owner") => {
+  const uniqueUserIds = [...new Set((items || []).map((item) => item?.[userIdField]).filter(Boolean))];
+  if (!uniqueUserIds.length) {
+    return [];
+  }
+
+  const profileItems = [];
+  for (let index = 0; index < uniqueUserIds.length; index += 100) {
+    const keys = uniqueUserIds.slice(index, index + 100).map((userId) => ({ userId }));
+    const result = await ddb.send(
+      new BatchGetCommand({
+        RequestItems: {
+          [env.usersTableName]: {
+            Keys: keys,
+            ProjectionExpression: "userId, username, displayName",
+          },
+        },
+      }),
+    );
+
+    profileItems.push(...(result.Responses?.[env.usersTableName] || []));
+  }
+
+  const profilesByUserId = new Map(profileItems.map((item) => [item.userId, item]));
+
+  return items.map((item) => {
+    const profile = profilesByUserId.get(item?.[userIdField]) || {};
+    return {
+      ...item,
+      [`${profileFieldPrefix}Username`]: profile.username || "",
+      [`${profileFieldPrefix}DisplayName`]: profile.displayName || "",
     };
   });
 };
@@ -1921,8 +1958,10 @@ const listSubmissions = async (event) => {
     ? (result.Items || []).filter((item) => canAccessSubmission(access, item))
     : result.Items || [];
 
+  const submissions = await enrichItemsWithProfiles(visibleItems, "ownerId", "owner");
+
   return response(200, {
-    submissions: visibleItems.map(safeSubmission),
+    submissions: submissions.map(safeSubmission),
   });
 };
 
@@ -1951,7 +1990,7 @@ const getSubmission = async (event) => {
   }
 
   return response(200, {
-    submission: safeSubmission(result.Item),
+    submission: safeSubmission((await enrichItemsWithProfiles([result.Item], "ownerId", "owner"))[0]),
   });
 };
 
@@ -2060,7 +2099,7 @@ const createSubmission = async (event) => {
   );
 
   return response(201, {
-    submission: safeSubmission(item),
+    submission: safeSubmission((await enrichItemsWithProfiles([item], "ownerId", "owner"))[0]),
   });
 };
 
@@ -2132,8 +2171,49 @@ const updateSubmission = async (event) => {
   }
 
   return response(200, {
-    submission: safeSubmission(item),
+    submission: safeSubmission((await enrichItemsWithProfiles([item], "ownerId", "owner"))[0]),
   });
+};
+
+const deleteSubmission = async (event) => {
+  const submissionId = event.pathParameters?.submissionId;
+  if (!submissionId) {
+    return response(400, { message: "Missing submissionId" });
+  }
+
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: env.submissionsTableName,
+      Key: { submissionId },
+    }),
+  );
+
+  if (!existing.Item) {
+    return response(404, { message: "Submission not found" });
+  }
+
+  const assignment = await getAssignmentRecord(existing.Item.assignmentId);
+  if (!assignment) {
+    return response(404, { message: "Assignment not found" });
+  }
+
+  const access = await getEnsembleAccess(event, assignment.ensembleId);
+  if (!access.ok) return access.response;
+
+  const isOwner = existing.Item.ownerId === access.userId;
+  const isReviewer = access.isOwner || privilegedRoles.has(access.membership?.role ?? "") || access.isDirectorAccount;
+  if (!isOwner && !isReviewer) {
+    return response(403, { message: "You can only delete your own submissions" });
+  }
+
+  await ddb.send(
+    new DeleteCommand({
+      TableName: env.submissionsTableName,
+      Key: { submissionId },
+    }),
+  );
+
+  return response(200, { ok: true });
 };
 
 const listComments = async (event) => {
@@ -2549,6 +2629,7 @@ exports.handler = async (event) => {
   if (key === "POST /submissions") return createSubmission(event);
   if (key === "GET /submissions/{submissionId}") return getSubmission(event);
   if (key === "PUT /submissions/{submissionId}") return updateSubmission(event);
+  if (key === "DELETE /submissions/{submissionId}") return deleteSubmission(event);
   if (key === "GET /comments") return listComments(event);
   if (key === "POST /comments") return createComment(event);
   if (key === "GET /conversations") return listConversations(event);
