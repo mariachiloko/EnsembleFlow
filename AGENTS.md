@@ -122,6 +122,7 @@ Phase 23: public frontend hosting and live deployment.
 - Added a selected-submission detail window for assignments so users can open a submission, see notes and video, add comments, review it, or delete it without juggling ID dropdowns.
 - Added a member-facing submissions list so members can reopen their own uploads and delete them from the same detail window.
 - Added a DELETE /submissions API route and enriched submission records with owner display labels so the UI can stay name-first.
+- Added a header inbox drawer with conversation avatars, participant names, and a private chat view so messages are easy to reach from anywhere in the app.
 - Added the EnsembleFlow logo as a frontend SVG asset and favicon.
 - Replaced text-only brand labels in the sign-in screen, sidebar, and hero header with the logo lockup.
 - Replaced the squeezed full-logo usage with a compact mark plus live wordmark so the brand scales cleanly in sidebars and headers.

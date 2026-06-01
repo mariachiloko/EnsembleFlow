@@ -129,18 +129,33 @@ function getSubmissionOwnerLabel(submission: {
   return "Unknown member";
 }
 
-function getProfileLabel(profile?: { username?: string; displayName?: string } | null) {
-  const displayName = profile?.displayName?.trim();
+function getProfileLabel(profile?: {
+  username?: string;
+  displayName?: string;
+} | null) {
+  if (!profile) {
+    return "Unknown member";
+  }
+
+  const displayName = profile.displayName?.trim();
   if (displayName) {
     return displayName;
   }
 
-  const username = profile?.username?.trim();
+  const username = profile.username?.trim();
   if (username) {
     return `@${username}`;
   }
 
   return "Unknown member";
+}
+
+function getAvatarText(profile?: {
+  username?: string;
+  displayName?: string;
+} | null) {
+  const label = getProfileLabel(profile);
+  return getInitials(label);
 }
 
 function getSubmissionStatusLabel(status?: string) {
@@ -252,6 +267,15 @@ function App() {
     title: string;
     createdBy: string;
     participantIds: string[];
+    createdByUsername: string;
+    createdByDisplayName: string;
+    createdByPhotoKey: string;
+    participantProfiles: Array<{
+      userId: string;
+      username: string;
+      displayName: string;
+      photoKey: string;
+    }>;
     createdAt: string;
     updatedAt: string;
   }>>([]);
@@ -259,10 +283,15 @@ function App() {
     conversationId: string;
     messageId: string;
     senderId: string;
+    senderUsername: string;
+    senderDisplayName: string;
+    senderPhotoKey: string;
     body: string;
     createdAt: string;
     updatedAt: string;
   }>>([]);
+  const [conversationPhotoUrls, setConversationPhotoUrls] = useState<Record<string, string>>({});
+  const [messagePhotoUrls, setMessagePhotoUrls] = useState<Record<string, string>>({});
   const [remoteNotifications, setRemoteNotifications] = useState<Array<{
     userId: string;
     notificationId: string;
@@ -351,6 +380,12 @@ function App() {
   const [sectionMessageConversationId, setSectionMessageConversationId] = useState("");
   const [sectionMessageTitle, setSectionMessageTitle] = useState("");
   const [sectionMessageBody, setSectionMessageBody] = useState("");
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxNewChatOpen, setInboxNewChatOpen] = useState(false);
+  const [inboxSelectedConversationId, setInboxSelectedConversationId] = useState("");
+  const [inboxNewChatTitle, setInboxNewChatTitle] = useState("");
+  const [inboxNewChatParticipantIds, setInboxNewChatParticipantIds] = useState<string[]>([]);
+  const [inboxNewChatBody, setInboxNewChatBody] = useState("");
   const [selectedMemberSectionId, setSelectedMemberSectionId] = useState("");
   const [selectedDirectorMemberId, setSelectedDirectorMemberId] = useState("");
   const [directorMemberMessage, setDirectorMemberMessage] = useState("");
@@ -850,6 +885,7 @@ function App() {
   const visibleSubmissions = remoteSubmissions;
   const visibleComments = remoteComments;
   const visibleNotifications = remoteNotifications;
+  const unreadInboxCount = visibleNotifications.filter((notification) => !notification.isRead).length;
   const directorAnnouncements = visibleNotifications.filter(
     (notification) =>
       notification.type === "announcement" &&
@@ -869,6 +905,17 @@ function App() {
     : "";
   const signedInEmailNormalized = signedInEmail.trim().toLowerCase();
   const avatarInitials = getInitials(signedInName);
+  const resolveChatPhotoUrl = (photoKey?: string) => {
+    if (!photoKey) {
+      return "";
+    }
+
+    if (photoKey === profile.photoKey) {
+      return profilePhotoUrl;
+    }
+
+    return conversationPhotoUrls[photoKey] || messagePhotoUrls[photoKey] || "";
+  };
   const getMemberNameById = (userId: string) => {
     if (userId === profile.userId) {
       return signedInName;
@@ -892,6 +939,9 @@ function App() {
     visibleAssignments.find((assignment) => assignment.assignmentId === selectedDirectorAssignmentId) || null;
   const selectedSubmissionAssignment =
     visibleAssignments.find((assignment) => assignment.assignmentId === selectedDirectorSubmissionId) || null;
+  const activeInboxConversationId = inboxSelectedConversationId || sectionMessageConversationId;
+  const activeInboxConversation =
+    remoteConversations.find((conversation) => conversation.conversationId === activeInboxConversationId) || null;
   const selectedSectionAssignments = selectedDirectorSection
     ? visibleAssignments.filter(
         (assignment) =>
@@ -958,6 +1008,9 @@ function App() {
       )
     : [];
   const currentSectionRoster = currentSectionMemberships.filter((membership) => membership.userId !== profile.userId);
+  const inboxComposeRoster = isDirectorMode
+    ? selectedDirectorSectionMemberships.filter((membership) => membership.userId !== profile.userId)
+    : currentSectionRoster;
   const currentMemberAssignments = !isDirectorMode && selectedDirectorEnsemble
     ? visibleAssignments.filter(
         (assignment) =>
@@ -965,6 +1018,10 @@ function App() {
           (!assignment.sectionId || assignment.sectionId === selectedMemberSection?.sectionId),
       )
     : [];
+  const inboxSelectedConversation =
+    remoteConversations.find((conversation) => conversation.conversationId === activeInboxConversationId) || null;
+  const inboxSelectedConversationParticipants = inboxSelectedConversation?.participantProfiles || [];
+  const inboxSelectedConversationMessages = remoteConversationMessages;
   const memberSubmissions = !isDirectorMode && selectedDirectorEnsemble
     ? visibleSubmissions.filter(
         (submission) =>
@@ -1014,10 +1071,11 @@ function App() {
             response.conversations.length &&
             !response.conversations.some((conversation) => conversation.conversationId === sectionMessageConversationId)
           ) {
-            setSectionMessageConversationId(response.conversations[0].conversationId);
+            selectConversation(response.conversations[0].conversationId);
           }
           if (!response.conversations.length) {
             setSectionMessageConversationId("");
+            setInboxSelectedConversationId("");
             setRemoteConversationMessages([]);
           }
           return;
@@ -1041,10 +1099,11 @@ function App() {
           response.conversations.length &&
           !response.conversations.some((conversation) => conversation.conversationId === sectionMessageConversationId)
         ) {
-          setSectionMessageConversationId(response.conversations[0].conversationId);
+          selectConversation(response.conversations[0].conversationId);
         }
         if (!response.conversations.length) {
           setSectionMessageConversationId("");
+          setInboxSelectedConversationId("");
           setRemoteConversationMessages([]);
         }
       } catch (error) {
@@ -1094,6 +1153,76 @@ function App() {
       cancelled = true;
     };
   }, [accessToken, sectionMessageConversationId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadChatAvatars() {
+      if (!accessToken) {
+        setConversationPhotoUrls({});
+        setMessagePhotoUrls({});
+        return;
+      }
+
+      const photoKeys = new Set<string>();
+      remoteConversations.forEach((conversation) => {
+        conversation.participantProfiles.forEach((profile) => {
+          if (profile.photoKey) {
+            photoKeys.add(profile.photoKey);
+          }
+        });
+        if (conversation.createdByPhotoKey) {
+          photoKeys.add(conversation.createdByPhotoKey);
+        }
+      });
+      remoteConversationMessages.forEach((message) => {
+        if (message.senderPhotoKey) {
+          photoKeys.add(message.senderPhotoKey);
+        }
+      });
+
+      if (!photoKeys.size) {
+        setConversationPhotoUrls({});
+        setMessagePhotoUrls({});
+        return;
+      }
+
+      const nextPhotoUrls: Record<string, string> = {};
+
+      await Promise.all(
+        [...photoKeys].map(async (photoKey) => {
+          try {
+            const result = await getUploadUrl(accessToken, photoKey);
+            if (!cancelled) {
+              nextPhotoUrls[photoKey] = result.url;
+            }
+          } catch {
+            // Ignore missing chat avatars.
+          }
+        }),
+      );
+
+      if (!cancelled) {
+        setConversationPhotoUrls(nextPhotoUrls);
+        setMessagePhotoUrls(nextPhotoUrls);
+      }
+    }
+
+    void loadChatAvatars();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, remoteConversations, remoteConversationMessages]);
+
+  useEffect(() => {
+    if (!sectionMessageConversationId) {
+      setInboxSelectedConversationId("");
+      return;
+    }
+
+    setInboxSelectedConversationId(sectionMessageConversationId);
+  }, [sectionMessageConversationId]);
 
   const showWorkspace = Boolean(accessToken);
   const navigationItems = [
@@ -1148,6 +1277,8 @@ function App() {
     setSelectedDirectorAssignmentId("");
     setSelectedDirectorMemberId("");
     setAssignmentSectionId("");
+    closeInbox();
+    setInboxSelectedConversationId("");
   }
 
   function openDirectorEnsemble(ensembleId: string) {
@@ -1207,6 +1338,29 @@ function App() {
     setSelectedSubmissionCommentsOpen(false);
   }
 
+  function openConversation(conversationId: string) {
+    setSectionMessageConversationId(conversationId);
+    setInboxSelectedConversationId(conversationId);
+    setInboxOpen(true);
+  }
+
+  function selectConversation(conversationId: string) {
+    setSectionMessageConversationId(conversationId);
+    setInboxSelectedConversationId(conversationId);
+  }
+
+  function openInbox() {
+    setInboxOpen(true);
+    if (!inboxSelectedConversationId && sectionMessageConversationId) {
+      setInboxSelectedConversationId(sectionMessageConversationId);
+    }
+  }
+
+  function closeInbox() {
+    setInboxOpen(false);
+    setInboxNewChatOpen(false);
+  }
+
   function openDirectorAnnouncements(ensembleId: string) {
     setStructureEnsembleId(ensembleId);
     setDirectorView("announcements");
@@ -1238,6 +1392,8 @@ function App() {
     setSectionMessageTitle("");
     setSectionMessageBody("");
     setConversationParticipantIds([]);
+    closeInbox();
+    setInboxSelectedConversationId("");
     setMemberView("home");
     document.getElementById("ensembles")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -1252,6 +1408,7 @@ function App() {
 
   function openMemberMessages() {
     setMemberView("messages");
+    setInboxOpen(true);
   }
 
   function openMemberAssignments() {
@@ -1839,7 +1996,10 @@ function App() {
 
   async function handleConversationSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedDirectorEnsemble || !selectedMemberSection?.sectionId) {
+    const targetSectionId =
+      (isDirectorMode ? selectedDirectorSection?.sectionId : selectedMemberSection?.sectionId) || "";
+
+    if (!selectedDirectorEnsemble || !targetSectionId) {
       setFormMessage("Open an ensemble and choose a section first.");
       return;
     }
@@ -1850,13 +2010,13 @@ function App() {
     try {
       const result = await createConversation(accessToken, {
         ensembleId: selectedDirectorEnsemble.ensembleId,
-        sectionId: selectedMemberSection.sectionId,
+        sectionId: targetSectionId,
         title: sectionMessageTitle.trim(),
         participantIds: conversationParticipantIds,
       });
 
       setRemoteConversations((current) => [result.conversation, ...current]);
-      setSectionMessageConversationId(result.conversation.conversationId);
+      openConversation(result.conversation.conversationId);
       setSectionMessageTitle("");
       setConversationParticipantIds([]);
       setFormMessage("Conversation created.");
@@ -1869,7 +2029,7 @@ function App() {
 
   async function handleMessageSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!sectionMessageConversationId) {
+    if (!activeInboxConversationId) {
       setFormMessage("Choose a conversation first.");
       return;
     }
@@ -1884,7 +2044,7 @@ function App() {
 
     try {
       const result = await createMessage(accessToken, {
-        conversationId: sectionMessageConversationId,
+        conversationId: activeInboxConversationId,
         body: sectionMessageBody.trim(),
       });
 
@@ -1934,7 +2094,7 @@ function App() {
 
       setRemoteConversations((current) => [result.conversation, ...current]);
       setRemoteConversationMessages((current) => [...current, messageResult.message]);
-      setSectionMessageConversationId(result.conversation.conversationId);
+      openConversation(result.conversation.conversationId);
       setDirectorMemberMessage("");
       setFormMessage("Message sent.");
       await reloadNotifications();
@@ -2467,7 +2627,7 @@ function App() {
                           <button
                             className="button button-secondary"
                             type="button"
-                            onClick={() => setSectionMessageConversationId(conversation.conversationId)}
+                            onClick={() => openConversation(conversation.conversationId)}
                           >
                             Open
                           </button>
@@ -2939,6 +3099,209 @@ function App() {
             ) : null}
       </section>
 
+      {showWorkspace && inboxOpen ? (
+        <div className="modal-backdrop inbox-backdrop" role="presentation" onClick={closeInbox}>
+          <div className="panel inbox-drawer" onClick={(event) => event.stopPropagation()}>
+            <div className="inbox-shell">
+              <div className="inbox-sidebar">
+                <div className="section-header">
+                  <div>
+                    <h2>Inbox</h2>
+                    <p className="muted-copy">Private chats and group threads.</p>
+                  </div>
+                  <button className="button button-secondary" type="button" onClick={closeInbox}>
+                    Close
+                  </button>
+                </div>
+
+                <div className="form-actions inbox-actions">
+                  <button className="button button-primary" type="button" onClick={() => setInboxNewChatOpen((current) => !current)}>
+                    {inboxNewChatOpen ? "Hide new chat" : "New chat"}
+                  </button>
+                </div>
+
+                {inboxNewChatOpen ? (
+                  <form className="panel form-panel inbox-compose" onSubmit={handleConversationSubmit}>
+                    <label className="field">
+                      <span>Chat title</span>
+                      <input
+                        value={sectionMessageTitle}
+                        onChange={(event) => setSectionMessageTitle(event.target.value)}
+                        placeholder="Brass check-in"
+                      />
+                    </label>
+                    <div className="field">
+                      <span>People</span>
+                      <div className="checkbox-list">
+                        {inboxComposeRoster.length ? (
+                          inboxComposeRoster.map((membership) => (
+                            <label className="checkbox-row" key={`${membership.userId}-${membership.ensembleId}`}>
+                              <input
+                                type="checkbox"
+                                checked={conversationParticipantIds.includes(membership.userId)}
+                                onChange={(event) => {
+                                  setConversationParticipantIds((current) =>
+                                    event.target.checked
+                                      ? [...current, membership.userId]
+                                      : current.filter((item) => item !== membership.userId),
+                                  );
+                                }}
+                              />
+                              <span>{getMemberDisplayName(membership)}</span>
+                            </label>
+                          ))
+                        ) : (
+                          <p className="muted-copy">Open a section first to start a group chat.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="form-actions">
+                      <button className="button button-primary" type="submit" disabled={formBusy || !inboxComposeRoster.length}>
+                        Start chat
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
+
+                <div className="inbox-thread-list">
+                  {remoteConversations.length ? (
+                    remoteConversations.map((conversation) => {
+                      const participantPreview = conversation.participantProfiles.slice(0, 3);
+                      return (
+                        <button
+                          key={conversation.conversationId}
+                          type="button"
+                          className={`inbox-thread ${activeInboxConversationId === conversation.conversationId ? "inbox-thread-active" : ""}`}
+                          onClick={() => openConversation(conversation.conversationId)}
+                        >
+                          <div className="inbox-thread-avatars" aria-hidden="true">
+                            {participantPreview.length ? (
+                              participantPreview.map((participant) => {
+                                const photoUrl = resolveChatPhotoUrl(participant.photoKey);
+                                const label = getProfileLabel(participant);
+                                return (
+                                  <span className="avatar-circle avatar-circle-small" key={participant.userId}>
+                                    {photoUrl ? <img className="avatar-image" src={photoUrl} alt="" /> : getInitials(label)}
+                                  </span>
+                                );
+                              })
+                            ) : (
+                              <span className="avatar-circle avatar-circle-small">{getInitials(conversation.title)}</span>
+                            )}
+                          </div>
+                          <div className="inbox-thread-copy">
+                            <h3>{conversation.title}</h3>
+                            <p className="muted-copy">
+                              {conversation.participantProfiles.map((participant) => getProfileLabel(participant)).join(", ")}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <article className="panel">
+                      <h3>No conversations yet</h3>
+                      <p>Start a group chat from the selected section or wait for someone to message you.</p>
+                    </article>
+                  )}
+                </div>
+              </div>
+
+              <div className="inbox-thread-view">
+                {activeInboxConversation ? (
+                  <>
+                    <div className="section-header">
+                      <div>
+                        <h2>{activeInboxConversation.title}</h2>
+                        <p className="muted-copy">
+                          {activeInboxConversation.participantProfiles.map((participant) => getProfileLabel(participant)).join(", ")}
+                        </p>
+                      </div>
+                      <div className="form-actions">
+                        <button className="button button-secondary" type="button" onClick={() => setInboxNewChatOpen(true)}>
+                          Add group
+                        </button>
+                        <button className="button button-secondary" type="button" onClick={closeInbox}>
+                          Done
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="inbox-participants">
+                      {activeInboxConversation.participantProfiles.map((participant) => {
+                        const photoUrl = resolveChatPhotoUrl(participant.photoKey);
+                        const label = getProfileLabel(participant);
+                        return (
+                          <div className="inbox-participant" key={participant.userId}>
+                            <span className="avatar-circle avatar-circle-small">
+                              {photoUrl ? <img className="avatar-image" src={photoUrl} alt="" /> : getInitials(label)}
+                            </span>
+                            <span>{label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="inbox-messages">
+                      {remoteConversationMessages.length ? (
+                        remoteConversationMessages.map((message) => {
+                          const label = getProfileLabel({
+                            username: message.senderUsername,
+                            displayName: message.senderDisplayName,
+                          });
+                          const photoUrl = resolveChatPhotoUrl(message.senderPhotoKey);
+                          return (
+                            <article className="inbox-message" key={message.messageId}>
+                              <span className="avatar-circle avatar-circle-small">
+                                {photoUrl ? <img className="avatar-image" src={photoUrl} alt="" /> : getInitials(label)}
+                              </span>
+                              <div className="inbox-message-copy">
+                                <p className="ensemble-role">{label}</p>
+                                <p>{message.body}</p>
+                                <p className="muted-copy">
+                                  {message.createdAt ? new Date(message.createdAt).toLocaleString() : "Unknown"}
+                                </p>
+                              </div>
+                            </article>
+                          );
+                        })
+                      ) : (
+                        <article className="panel">
+                          <h3>No messages yet</h3>
+                          <p>Start the conversation below.</p>
+                        </article>
+                      )}
+                    </div>
+
+                    <form className="panel form-panel inbox-reply" onSubmit={handleMessageSubmit}>
+                      <label className="field">
+                        <span>Message</span>
+                        <textarea
+                          value={sectionMessageBody}
+                          onChange={(event) => setSectionMessageBody(event.target.value)}
+                          placeholder="Write a private message"
+                          rows={4}
+                        />
+                      </label>
+                      <div className="form-actions">
+                        <button className="button button-primary" type="submit" disabled={formBusy || !activeInboxConversationId}>
+                          Send
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                ) : (
+                  <article className="panel">
+                    <h3>Select a conversation</h3>
+                    <p>Choose a thread from the inbox list to read and reply.</p>
+                  </article>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {!isDirectorMode && memberView === "assignments" && selectedSubmissionCommentsOpen && selectedSubmission ? (
         <div className="modal-backdrop" role="presentation" onClick={closeSubmissionInspector}>
           <div className="panel form-panel modal-panel submission-modal" onClick={(event) => event.stopPropagation()}>
@@ -3236,6 +3599,11 @@ function App() {
                 {signedInUsername ? <p className="muted-copy">@{signedInUsername}</p> : null}
               </div>
               <div className="account-actions">
+                <button className="button button-secondary inbox-button" type="button" onClick={openInbox}>
+                  <span aria-hidden="true">✉</span>
+                  <span>Inbox</span>
+                  {unreadInboxCount ? <span className="inbox-badge">{unreadInboxCount}</span> : null}
+                </button>
                 <button className="button button-primary" type="button" onClick={openProfileEditor}>
                   Edit profile photo
                 </button>
@@ -3574,7 +3942,7 @@ function App() {
                           <button
                             className="button button-secondary"
                             type="button"
-                            onClick={() => setSectionMessageConversationId(conversation.conversationId)}
+                            onClick={() => openConversation(conversation.conversationId)}
                           >
                             Open
                           </button>

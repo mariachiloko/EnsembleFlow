@@ -275,8 +275,12 @@ const safeConversation = (item) =>
         ensembleId: item.ensembleId,
         sectionId: item.sectionId ?? "",
         createdBy: item.createdBy ?? "",
+        createdByUsername: item.createdByUsername ?? "",
+        createdByDisplayName: item.createdByDisplayName ?? "",
+        createdByPhotoKey: item.createdByPhotoKey ?? "",
         title: item.title ?? "",
         participantIds: Array.isArray(item.participantIds) ? item.participantIds : [],
+        participantProfiles: Array.isArray(item.participantProfiles) ? item.participantProfiles : [],
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       }
@@ -288,6 +292,9 @@ const safeConversationMessage = (item) =>
         conversationId: item.conversationId,
         messageId: item.messageId,
         senderId: item.senderId ?? "",
+        senderUsername: item.senderUsername ?? "",
+        senderDisplayName: item.senderDisplayName ?? "",
+        senderPhotoKey: item.senderPhotoKey ?? "",
         body: item.body ?? "",
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
@@ -541,6 +548,79 @@ const enrichItemsWithProfiles = async (items, userIdField = "ownerId", profileFi
       ...item,
       [`${profileFieldPrefix}Username`]: profile.username || "",
       [`${profileFieldPrefix}DisplayName`]: profile.displayName || "",
+    };
+  });
+};
+
+const getProfilesByUserIds = async (userIds) => {
+  const uniqueUserIds = [...new Set((userIds || []).filter(Boolean))];
+  if (!uniqueUserIds.length) {
+    return new Map();
+  }
+
+  const profileItems = [];
+  for (let index = 0; index < uniqueUserIds.length; index += 100) {
+    const keys = uniqueUserIds.slice(index, index + 100).map((userId) => ({ userId }));
+    const result = await ddb.send(
+      new BatchGetCommand({
+        RequestItems: {
+          [env.usersTableName]: {
+            Keys: keys,
+            ProjectionExpression: "userId, username, displayName, photoKey",
+          },
+        },
+      }),
+    );
+
+    profileItems.push(...(result.Responses?.[env.usersTableName] || []));
+  }
+
+  return new Map(profileItems.map((item) => [item.userId, item]));
+};
+
+const enrichConversationsWithProfiles = async (conversations) => {
+  const profileMap = await getProfilesByUserIds(
+    (conversations || []).flatMap((conversation) => [
+      ...(Array.isArray(conversation.participantIds) ? conversation.participantIds : []),
+      conversation.createdBy || "",
+    ]),
+  );
+
+  return conversations.map((conversation) => {
+    const participantProfiles = (Array.isArray(conversation.participantIds) ? conversation.participantIds : [])
+      .map((userId) => {
+        const profile = profileMap.get(userId) || {};
+        return {
+          userId,
+          username: profile.username || "",
+          displayName: profile.displayName || "",
+          photoKey: profile.photoKey || "",
+        };
+      })
+      .filter((profile) => profile.userId);
+
+    const createdByProfile = profileMap.get(conversation.createdBy) || {};
+
+    return {
+      ...conversation,
+      createdByUsername: createdByProfile.username || "",
+      createdByDisplayName: createdByProfile.displayName || "",
+      createdByPhotoKey: createdByProfile.photoKey || "",
+      participantProfiles,
+    };
+  });
+};
+
+const enrichMessagesWithProfiles = async (messages) => {
+  const profileMap = await getProfilesByUserIds((messages || []).map((message) => message.senderId));
+
+  return messages.map((message) => {
+    const profile = profileMap.get(message.senderId) || {};
+    return {
+      ...message,
+      senderUsername: profile.username || "",
+      senderDisplayName: profile.displayName || "",
+      senderPhotoKey: profile.photoKey || "",
     };
   });
 };
@@ -2341,8 +2421,7 @@ const listConversations = async (event) => {
     }),
   );
 
-  const conversations = (result.Items || [])
-    .map(safeConversation)
+  const conversations = (await enrichConversationsWithProfiles((result.Items || []).map(safeConversation)))
     .filter((conversation) => {
       if (requestedSectionId && conversation.sectionId !== requestedSectionId) {
         return false;
@@ -2423,7 +2502,7 @@ const createConversation = async (event) => {
   );
 
   return response(201, {
-    conversation: safeConversation(item),
+    conversation: (await enrichConversationsWithProfiles([safeConversation(item)]))[0],
   });
 };
 
@@ -2460,7 +2539,7 @@ const listMessages = async (event) => {
   );
 
   return response(200, {
-    messages: (result.Items || []).map(safeConversationMessage),
+    messages: await enrichMessagesWithProfiles((result.Items || []).map(safeConversationMessage)),
   });
 };
 
@@ -2528,7 +2607,7 @@ const createMessage = async (event) => {
   );
 
   return response(201, {
-    message: safeConversationMessage(item),
+    message: (await enrichMessagesWithProfiles([safeConversationMessage(item)]))[0],
   });
 };
 

@@ -143,6 +143,13 @@ export type ConversationPayload = {
   participantIds?: string[];
 };
 
+export type ProfileSummary = {
+  userId: string;
+  username: string;
+  displayName: string;
+  photoKey: string;
+};
+
 export type MessagePayload = {
   conversationId: string;
   body: string;
@@ -583,6 +590,10 @@ export async function listConversations(token: string, ensembleId: string, secti
       title: string;
       createdBy: string;
       participantIds: string[];
+      createdByUsername: string;
+      createdByDisplayName: string;
+      createdByPhotoKey: string;
+      participantProfiles: ProfileSummary[];
       createdAt: string;
       updatedAt: string;
     }>;
@@ -598,6 +609,10 @@ export async function createConversation(token: string, payload: ConversationPay
       title: string;
       createdBy: string;
       participantIds: string[];
+      createdByUsername: string;
+      createdByDisplayName: string;
+      createdByPhotoKey: string;
+      participantProfiles: ProfileSummary[];
       createdAt: string;
       updatedAt: string;
     };
@@ -615,6 +630,9 @@ export async function listMessages(token: string, conversationId: string) {
       conversationId: string;
       messageId: string;
       senderId: string;
+      senderUsername: string;
+      senderDisplayName: string;
+      senderPhotoKey: string;
       body: string;
       createdAt: string;
       updatedAt: string;
@@ -628,6 +646,9 @@ export async function createMessage(token: string, payload: MessagePayload) {
       conversationId: string;
       messageId: string;
       senderId: string;
+      senderUsername: string;
+      senderDisplayName: string;
+      senderPhotoKey: string;
       body: string;
       createdAt: string;
       updatedAt: string;
