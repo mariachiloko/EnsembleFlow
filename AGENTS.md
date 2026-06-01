@@ -125,6 +125,7 @@ Phase 23: public frontend hosting and live deployment.
 - Restored the app mark closer to the original music/play/flow concept while keeping the separate side wordmark.
 - Fixed the logo mark SVG viewBox/padding so the restored mark no longer renders clipped in the header/sidebar.
 - Added the missing Lambda IAM permission for the usernames table so profile saves can complete without a generic `Internal Server Error`.
+- Added the missing Lambda `DeleteItem` permission for the usernames table so username changes can remove the old reserved username row without failing.
 - Verified profile save end-to-end against the live API with a real Cognito access token and got an HTTP 200 response.
 - Widened the logo SVG canvas and adjusted the rendered size so the mark has enough breathing room in compact layouts.
 - Added CloudFront and a private S3 bucket for public frontend hosting.
