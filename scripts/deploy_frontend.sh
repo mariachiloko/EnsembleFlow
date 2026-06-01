@@ -28,9 +28,15 @@ fi
 
 npm --prefix "${FRONTEND_DIR}" run build
 
-aws s3 sync "${FRONTEND_DIR}/dist" "s3://${FRONTEND_BUCKET}" \
+aws s3 sync "${FRONTEND_DIR}/dist/assets" "s3://${FRONTEND_BUCKET}/assets" \
   --delete \
-  --cache-control "public,max-age=300"
+  --cache-control "public,max-age=31536000,immutable"
+
+aws s3 cp "${FRONTEND_DIR}/dist/index.html" "s3://${FRONTEND_BUCKET}/index.html" \
+  --cache-control "no-cache, no-store, must-revalidate"
+
+aws s3 cp "${FRONTEND_DIR}/dist/favicon.svg" "s3://${FRONTEND_BUCKET}/favicon.svg" \
+  --cache-control "public,max-age=31536000,immutable"
 
 aws cloudfront create-invalidation \
   --distribution-id "${DISTRIBUTION_ID}" \

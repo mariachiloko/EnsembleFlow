@@ -214,15 +214,6 @@ ul {
   min-width: 0;
 }
 
-.workspace-toolbar {
-  position: sticky;
-  top: 20px;
-  z-index: 15;
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 14px;
-}
-
 .workspace > .section {
   scroll-margin-top: 24px;
 }
@@ -237,6 +228,12 @@ ul {
   gap: 16px;
   align-items: center;
   margin-bottom: 16px;
+}
+
+.hero-topline-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex: 1;
 }
 
 .topline-statuses {
@@ -314,6 +311,10 @@ ul {
   gap: 8px;
   white-space: nowrap;
   box-shadow: var(--shadow);
+}
+
+.auth-loading {
+  min-height: 260px;
 }
 
 .inbox-badge {

@@ -186,6 +186,7 @@ function App() {
   const [apiState, setApiState] = useState("Checking backend connection...");
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [accessToken, setAccessToken] = useState("");
+  const [authReady, setAuthReady] = useState(false);
   const [portalMode, setPortalMode] = useState<"director" | "member">("member");
   const [isDirectorAccount, setIsDirectorAccount] = useState(false);
   const [directorView, setDirectorView] = useState<
@@ -474,6 +475,10 @@ function App() {
       } catch (error) {
         if (!cancelled) {
           setAuthMessage(error instanceof Error ? error.message : "Auth callback failed.");
+        }
+      } finally {
+        if (!cancelled) {
+          setAuthReady(true);
         }
       }
     }
@@ -3529,7 +3534,20 @@ function App() {
     );
   }
 
+  if (!authReady) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-hero panel panel-accent auth-loading">
+          <BrandLogo />
+          <h1>Loading your workspace.</h1>
+          <p className="lede">Checking your sign-in session before showing the dashboard.</p>
+        </section>
+      </main>
+    );
+  }
+
   if (!showWorkspace) {
+
     return (
       <main className="auth-shell">
         <section className="auth-hero panel panel-accent">
@@ -3631,17 +3649,16 @@ function App() {
       </aside>
 
       <div className="workspace">
-        <div className="workspace-toolbar">
-          <button className="button button-secondary inbox-button" type="button" onClick={openInbox}>
-            <span aria-hidden="true">✉</span>
-            <span>Inbox</span>
-            {unreadInboxCount ? <span className="inbox-badge">{unreadInboxCount}</span> : null}
-          </button>
-        </div>
-
         <section className="hero" id="overview">
           <div className="hero-topline">
             <BrandLogo compact />
+            <div className="hero-topline-actions">
+              <button className="button button-secondary inbox-button" type="button" onClick={openInbox}>
+                <span aria-hidden="true">✉</span>
+                <span>Inbox</span>
+                {unreadInboxCount ? <span className="inbox-badge">{unreadInboxCount}</span> : null}
+              </button>
+            </div>
           </div>
           <div className="hero-grid hero-grid-main">
             <div>
