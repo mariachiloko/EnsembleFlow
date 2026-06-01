@@ -107,7 +107,7 @@ function getMemberDisplayName(member: { userId: string; username?: string; displ
     return `@${username}`;
   }
 
-  return `Member ${member.userId.slice(0, 8)}`;
+  return "Unknown member";
 }
 
 function BrandLogo({ compact = false }: { compact?: boolean }) {
@@ -793,7 +793,7 @@ function App() {
     }
 
     const membership = activeMemberships.find((item) => item.userId === userId);
-    return membership ? getMemberDisplayName(membership) : `Member ${userId.slice(0, 8)}`;
+    return membership ? getMemberDisplayName(membership) : "Unknown member";
   };
   const selectedSubmission =
     visibleSubmissions.find((submission) => submission.submissionId === commentSubmissionId) ||
@@ -2462,7 +2462,6 @@ function App() {
                         .map((section) => (
                           <article className="ensemble-row panel" key={section.sectionId}>
                             <div>
-                              <p className="ensemble-role">Section ID: {section.sectionId}</p>
                               <h3>{section.name}</h3>
                               <p className="ensemble-status">{section.description || "No description yet."}</p>
                             </div>
@@ -3584,7 +3583,6 @@ function App() {
               <article className="panel" key={section.sectionId}>
                 <h3>{section.name}</h3>
                 <p>{section.description || "No description yet."}</p>
-                <p className="ensemble-role">Section ID: {section.sectionId}</p>
               </article>
             ))
           ) : (
@@ -3870,7 +3868,6 @@ function App() {
           {currentAssignments.map((assignment) => (
             <article className="ensemble-row panel" key={assignment.assignmentId}>
               <div>
-                <p className="ensemble-role">Ensemble ID: {assignment.ensembleId}</p>
                 <h3>{assignment.title}</h3>
                 <p className="ensemble-status">{assignment.description || "No description yet."}</p>
               </div>

@@ -118,6 +118,7 @@ Phase 23: public frontend hosting and live deployment.
 - Added membership profile-label enrichment so rosters can show display name or username instead of raw Cognito user IDs.
 - Added frontend member-name fallbacks so old records still render cleanly if a member has not saved a profile yet.
 - Added the Lambda `BatchGetItem` permission needed to load profile labels for roster membership lists.
+- Removed remaining raw section and assignment ID labels from the UI so member and director screens stay name-first.
 - Added the EnsembleFlow logo as a frontend SVG asset and favicon.
 - Replaced text-only brand labels in the sign-in screen, sidebar, and hero header with the logo lockup.
 - Replaced the squeezed full-logo usage with a compact mark plus live wordmark so the brand scales cleanly in sidebars and headers.
