@@ -124,6 +124,7 @@ Phase 23: public frontend hosting and live deployment.
 - Added a DELETE /submissions API route and enriched submission records with owner display labels so the UI can stay name-first.
 - Added a header inbox drawer with conversation avatars, participant names, and a private chat view so messages are easy to reach from anywhere in the app.
 - Added a compact submission video preview that opens the player in its own pop-up viewer instead of stretching the review panel.
+- Moved the inbox button into the top hero bar so it stays visible even when the account card scrolls out of view.
 - Added the EnsembleFlow logo as a frontend SVG asset and favicon.
 - Replaced text-only brand labels in the sign-in screen, sidebar, and hero header with the logo lockup.
 - Replaced the squeezed full-logo usage with a compact mark plus live wordmark so the brand scales cleanly in sidebars and headers.
@@ -163,6 +164,7 @@ Phase 23: public frontend hosting and live deployment.
 - Refresh AWS credentials and rerun Terraform apply; the first deploy attempt for profile-label enrichment failed because the AWS SSO token was expired.
 - Verify rosters and message sender labels show member display names/usernames after the backend deploy.
 - Verify the submission video preview opens a focused pop-up player and stays compact in the surrounding review panel.
+- Verify the inbox button is visible in the top hero bar in the signed-in browser view.
 - Decide later if a transparent PNG export is needed for app store/social/portfolio mockups.
 - Review the updated dark/light branding in the browser and tune spacing if the mark should be larger or smaller.
 - Replace the CloudFront URL with a custom domain later if a cleaner share link is wanted.

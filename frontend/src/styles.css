@@ -230,6 +230,15 @@ ul {
   margin-bottom: 16px;
 }
 
+.hero-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .topline-statuses {
   display: flex;
   gap: 10px;
@@ -303,6 +312,7 @@ ul {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
 }
 
 .inbox-badge {

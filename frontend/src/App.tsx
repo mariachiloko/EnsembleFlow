@@ -3634,6 +3634,13 @@ function App() {
         <section className="hero" id="overview">
           <div className="hero-topline">
             <BrandLogo compact />
+            <div className="hero-top-actions">
+              <button className="button button-secondary inbox-button" type="button" onClick={openInbox}>
+                <span aria-hidden="true">✉</span>
+                <span>Inbox</span>
+                {unreadInboxCount ? <span className="inbox-badge">{unreadInboxCount}</span> : null}
+              </button>
+            </div>
           </div>
           <div className="hero-grid hero-grid-main">
             <div>
@@ -3669,11 +3676,6 @@ function App() {
                 {signedInUsername ? <p className="muted-copy">@{signedInUsername}</p> : null}
               </div>
               <div className="account-actions">
-                <button className="button button-secondary inbox-button" type="button" onClick={openInbox}>
-                  <span aria-hidden="true">✉</span>
-                  <span>Inbox</span>
-                  {unreadInboxCount ? <span className="inbox-badge">{unreadInboxCount}</span> : null}
-                </button>
                 <button className="button button-primary" type="button" onClick={openProfileEditor}>
                   Edit profile photo
                 </button>
