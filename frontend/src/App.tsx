@@ -375,6 +375,7 @@ function App() {
       if (stored) {
         setAuthSession(stored);
         setAccessToken(stored.idToken || stored.accessToken);
+        setPortalMode(loadRequestedPortal());
         setAuthMessage(getAuthStatusText(stored));
       }
 
@@ -383,6 +384,7 @@ function App() {
         if (!cancelled && session) {
           setAuthSession(session);
           setAccessToken(session.idToken || session.accessToken);
+          setPortalMode(loadRequestedPortal());
           setAuthMessage(getAuthStatusText(session));
           window.history.replaceState({}, document.title, window.location.pathname);
           setFormMessage("Signed in.");

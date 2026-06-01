@@ -11,6 +11,7 @@ COGNITO_CLIENT_ID="$(terraform -chdir="${TERRAFORM_DIR}" output -raw user_pool_c
 FRONTEND_URL="$(terraform -chdir="${TERRAFORM_DIR}" output -raw frontend_url)"
 FRONTEND_BUCKET="$(terraform -chdir="${TERRAFORM_DIR}" output -raw frontend_bucket_name)"
 DISTRIBUTION_ID="$(terraform -chdir="${TERRAFORM_DIR}" output -raw frontend_distribution_id)"
+DIRECTOR_EMAIL="${DIRECTOR_EMAIL:-}"
 
 cat > "${FRONTEND_DIR}/.env.production.local" <<EOF
 VITE_API_URL=${API_URL}
@@ -20,6 +21,10 @@ VITE_COGNITO_REDIRECT_URI=${FRONTEND_URL}
 VITE_COGNITO_LOGOUT_URI=${FRONTEND_URL}
 VITE_COGNITO_SCOPES=openid email profile
 EOF
+
+if [[ -n "${DIRECTOR_EMAIL}" ]]; then
+  printf 'VITE_DIRECTOR_EMAIL=%s\n' "${DIRECTOR_EMAIL}" >> "${FRONTEND_DIR}/.env.production.local"
+fi
 
 npm --prefix "${FRONTEND_DIR}" run build
 
