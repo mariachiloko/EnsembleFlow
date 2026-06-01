@@ -295,6 +295,14 @@ ul {
   flex-wrap: wrap;
 }
 
+.account-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
 .account-copy {
   display: grid;
   gap: 8px;
@@ -309,12 +317,16 @@ ul {
 }
 
 .inbox-button {
-  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   white-space: nowrap;
   box-shadow: var(--shadow);
+  flex-shrink: 0;
+}
+
+.account-inbox-button {
+  min-height: 46px;
 }
 
 .auth-loading {

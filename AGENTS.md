@@ -124,9 +124,7 @@ Phase 23: public frontend hosting and live deployment.
 - Added a DELETE /submissions API route and enriched submission records with owner display labels so the UI can stay name-first.
 - Added a header inbox drawer with conversation avatars, participant names, and a private chat view so messages are easy to reach from anywhere in the app.
 - Added a compact submission video preview that opens the player in its own pop-up viewer instead of stretching the review panel.
-- Moved the inbox button into the top hero bar so it stays visible even when the account card scrolls out of view.
-- Moved the inbox button into a sticky workspace toolbar and verified it appears in the live browser after reload.
-- Added a fixed floating inbox button so the inbox entry point stays visible even if the toolbar is missed.
+- Moved the inbox button directly into the signed-in avatar row so it stays beside the profile picture and is immediately visible.
 - Changed frontend deployment so `index.html` is served with no-cache headers while assets stay long-lived cached.
 - Added the EnsembleFlow logo as a frontend SVG asset and favicon.
 - Replaced text-only brand labels in the sign-in screen, sidebar, and hero header with the logo lockup.
@@ -143,8 +141,7 @@ Phase 23: public frontend hosting and live deployment.
 - Added `scripts/deploy_frontend.sh` to build the Vite app from Terraform outputs, upload to S3, and invalidate CloudFront.
 - Deployed the frontend publicly at the current CloudFront URL.
 - Added an auth-loading gate so the app waits for session resolution before showing sign-in or workspace content.
-- Moved the inbox control into the signed-in hero header row so it is visible immediately in the workspace layout.
-- Moved the inbox control into the signed-in profile card beside the avatar and account actions so it is easier to find.
+- Moved the inbox control directly into the signed-in avatar row so it sits beside the profile picture and avoids layout wrapping.
 
 ## What Still Needs To Happen
 
@@ -170,12 +167,9 @@ Phase 23: public frontend hosting and live deployment.
 - Refresh AWS credentials and rerun Terraform apply; the first deploy attempt for profile-label enrichment failed because the AWS SSO token was expired.
 - Verify rosters and message sender labels show member display names/usernames after the backend deploy.
 - Verify the submission video preview opens a focused pop-up player and stays compact in the surrounding review panel.
-- Verify the inbox button is visible in the top hero bar in the signed-in browser view.
-- Verify the inbox button remains visible in the sticky workspace toolbar after page reloads and cache refreshes.
-- Verify the fixed floating inbox button appears in the live browser after a fresh deploy.
+- Verify the inbox button is visible in the signed-in profile card action row in the live browser after refresh.
 - Verify `index.html` is not stuck behind browser or edge cache after the deploy script change.
 - Verify the signed-in workspace inbox button once a real authenticated browser session is open. The browser session inspectable in this thread is currently on the sign-in screen, so the workspace inbox could not be rechecked from that view.
-- Verify the inbox button now appears inside the signed-in profile card next to the avatar and account actions after the next browser refresh.
 - Decide later if a transparent PNG export is needed for app store/social/portfolio mockups.
 - Review the updated dark/light branding in the browser and tune spacing if the mark should be larger or smaller.
 - Replace the CloudFront URL with a custom domain later if a cleaner share link is wanted.

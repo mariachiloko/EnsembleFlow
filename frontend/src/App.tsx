@@ -3676,15 +3676,17 @@ function App() {
           <div className="card-grid dashboard-grid">
             <article className="panel account-card">
               <div className="account-card-top">
-                <div className="avatar-circle" aria-hidden="true">
-                  {profilePhotoUrl ? <img className="avatar-image" src={profilePhotoUrl} alt="" /> : avatarInitials}
-                </div>
-                <div className="account-actions">
-                  <button className="button button-secondary inbox-button" type="button" onClick={openInbox}>
+                <div className="account-avatar-row">
+                  <div className="avatar-circle" aria-hidden="true">
+                    {profilePhotoUrl ? <img className="avatar-image" src={profilePhotoUrl} alt="" /> : avatarInitials}
+                  </div>
+                  <button className="button button-secondary inbox-button account-inbox-button" type="button" onClick={openInbox}>
                     <span aria-hidden="true">✉</span>
                     <span>Inbox</span>
                     {unreadInboxCount ? <span className="inbox-badge">{unreadInboxCount}</span> : null}
                   </button>
+                </div>
+                <div className="account-actions">
                   <button className="button button-primary" type="button" onClick={openProfileEditor}>
                     Edit profile photo
                   </button>
